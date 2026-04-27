@@ -1277,15 +1277,12 @@ function renderAll(){
 const _rq={queue:[],active:0,MAX:3,GAP:250,last:0};
 function _rqExec({resolve,reject,url,opts,retries}){
   _rq.active++;_rq.last=Date.now();
-  // Timeout de 8s por pedido — evita hangs silenciosos
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),8000);
-  fetch(url,{...opts,signal:controller.signal}).then(r=>{
-    clearTimeout(timer);
+  fetch(url,opts).then(r=>{
     if(r.status===429&&retries<4){
-      const delay=4000*(retries+1);
+      // 429 — pausa a queue inteira e re-enfileira com backoff exponencial
+      const delay=4000*(retries+1); // 4s, 8s, 12s, 16s
       _rq.active--;
-      _rq.last=Date.now()+delay;
+      _rq.last=Date.now()+delay; // bloqueia a queue durante o delay
       setTimeout(()=>{
         _rq.queue.unshift({resolve,reject,url,opts,retries:retries+1});
         _rqNext();
@@ -1293,17 +1290,7 @@ function _rqExec({resolve,reject,url,opts,retries}){
     }else{
       _rq.active--;resolve(r);_rqNext();
     }
-  }).catch(e=>{
-    clearTimeout(timer);
-    _rq.active--;
-    // Em caso de timeout ou erro de rede, resolve com resposta vazia em vez de rejeitar
-    if(e.name==='AbortError'){
-      resolve(new Response('{}',{status:408,headers:{'Content-Type':'application/json'}}));
-    }else{
-      reject(e);
-    }
-    _rqNext();
-  });
+  }).catch(e=>{_rq.active--;reject(e);_rqNext();});
 }
 function _rqNext(){
   if(_rq.active>=_rq.MAX||_rq.queue.length===0)return;
@@ -1758,6 +1745,13 @@ const SPORTS=[
   {group:'soccer',icon:'⚽',label:'Primera División Uruguai 🇺🇾',lid:268},
   {group:'soccer',icon:'⚽',label:'División Profesional Paraguai 🇵🇾',lid:285},
   {group:'soccer',icon:'⚽',label:'Liga FUTVE Venezuela 🇻🇪',lid:269},
+  // ── FUTEBOL FEMININO ──
+  {group:'soccer',icon:'⚽',label:'WSL 🏴󠁧󠁢󠁥󠁮󠁧󠁿',lid:188},
+  {group:'soccer',icon:'⚽',label:'Division 1 Féminine 🇫🇷',lid:193},
+  {group:'soccer',icon:'⚽',label:'Frauen-Bundesliga 🇩🇪',lid:195},
+  {group:'soccer',icon:'⚽',label:'Primera Iberdrola 🇪🇸',lid:192},
+  {group:'soccer',icon:'⚽',label:'Serie A Femminile 🇮🇹',lid:196},
+  {group:'soccer',icon:'⚽',label:'Women\'s Champions League',lid:19},
 ];
 const MARKETS={soccer:'h2h,totals'};
 const MARKETS_EXTRA={soccer:'btts,double_chance'};
@@ -5574,91 +5568,16 @@ async function loadGames(forceRefresh=false){
   document.getElementById('cache-text').innerHTML='A carregar dados da API...';
 
   let allPicks=[],leaguesOk=0,leaguesSkip=0,apiErrors=0;
-
-  // ── Tentar buscar dados do Worker KV (1 call em vez de 96+) ──────
-  let workerDataUsed=false;
-  try{
-    document.getElementById('loader-step').textContent='A carregar dados do servidor...';
-    progress.style.width='30%';
-    const workerRes=await fetch(`${WORKER_URL}/data`);
-    if(workerRes.ok){
-      const workerData=await workerRes.json();
-      if(workerData.fixtures&&workerData.fixtures.length>0){
-        // Construir fixtureMap e oddsMap a partir dos dados do Worker
-        const oddsMap={};
-        (workerData.odds||[]).forEach(item=>{
-          const id=item.fixture?.id;
-          if(id)oddsMap[id]=item.bookmakers||[];
-        });
-        // Agrupar fixtures por liga
-        const fixturesByLeague={};
-        (workerData.fixtures||[]).forEach(f=>{
-          const lid=f._lid;
-          if(!fixturesByLeague[lid])fixturesByLeague[lid]=[];
-          fixturesByLeague[lid].push(f);
-        });
-        const lids=Object.keys(fixturesByLeague);
-        lids.forEach((lid,i)=>{
-          progress.style.width=`${Math.round(30+((i+1)/lids.length)*60)}%`;
-          const sport=SPORTS.find(s=>s.lid===parseInt(lid))||{group:'soccer',icon:'⚽',label:`Liga ${lid}`,lid:parseInt(lid)};
-          const fixtures=fixturesByLeague[lid];
-          // Store team IDs and fixture cache
-          fixtures.forEach(f=>{
-            const id=f.fixture?.id;
-            const homeName=f.teams?.home?.name;
-            const awayName=f.teams?.away?.name;
-            const homeId=f.teams?.home?.id;
-            const awayId=f.teams?.away?.id;
-            if(homeName&&homeId){formCache[homeName+'_tid']=homeId;if(!formCache[homeName])formCache[homeName]=[];}
-            if(awayName&&awayId){formCache[awayName+'_tid']=awayId;if(!formCache[awayName])formCache[awayName]=[];}
-            if(homeName&&awayName&&id)upcomingFixtureCache[`${homeName}|${awayName}`]=id;
-          });
-          // Build game objects
-          const games=fixtures.map(f=>{
-            const id=f.fixture?.id;
-            const home=f.teams?.home?.name;
-            const away=f.teams?.away?.name;
-            if(!home||!away)return null;
-            return{
-              id:`af_${id}`,
-              home_team:home,away_team:away,
-              commence_time:f.fixture?.date,
-              bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],home,away):[],
-            };
-          }).filter(Boolean);
-          if(games.length>0){
-            leaguesOk++;
-            for(const g of games)allPicks.push(...extractPicks(g,sport));
-          }else leaguesSkip++;
-        });
-        // Update API usage display from Worker data
-        const rem=document.getElementById('odds-remaining');
-        if(rem)rem.textContent='KV';
-        workerDataUsed=true;
-        document.getElementById('loader-step').textContent='Dados do servidor carregados ✓';
-        progress.style.width='90%';
-      }
-    }
-    if(!workerDataUsed&&workerRes.status===202){
-      // Worker está a buscar dados — mostrar mensagem e tentar API directa
-      document.getElementById('loader-step').textContent='Servidor a preparar dados, a usar API directa...';
-    }
-  }catch(e){
-    console.warn('Worker /data falhou, a usar API directa:',e.message);
-  }
-
-  // ── Fallback: loop directo às 48 ligas (se Worker não tiver dados) ─
-  if(!workerDataUsed){
-    for(let i=0;i<SPORTS.length;i++){
-      const sport=SPORTS[i];
-      document.getElementById('loader-step').textContent=`${sport.label} (${i+1}/${SPORTS.length})`;
-      progress.style.width=`${Math.round(((i+1)/SPORTS.length)*100)}%`;
-      const{games,ok,status}=await fetchOdds(sport);
-      if(ok&&games.length>0)leaguesOk++;
-      else{leaguesSkip++;if(status===401||status===429||status===0)apiErrors++;}
-      for(const g of games)allPicks.push(...extractPicks(g,sport));
-      await new Promise(r=>setTimeout(r,status===429?2000:200));
-    }
+  for(let i=0;i<SPORTS.length;i++){
+    const sport=SPORTS[i];
+    document.getElementById('loader-step').textContent=`${sport.label} (${i+1}/${SPORTS.length})`;
+    progress.style.width=`${Math.round(((i+1)/SPORTS.length)*100)}%`;
+    const{games,ok,status}=await fetchOdds(sport);
+    if(ok&&games.length>0)leaguesOk++;
+    else{leaguesSkip++;if(status===401||status===429||status===0)apiErrors++;}
+    for(const g of games)allPicks.push(...extractPicks(g,sport));
+    // Adaptive delay — faster normally, slower after 429
+    await new Promise(r=>setTimeout(r,status===429?2000:200));
   }
 
   loading.style.display='none';btn.classList.remove('loading');
@@ -5739,73 +5658,15 @@ async function loadGames(forceRefresh=false){
   document.getElementById('games-count').textContent=`${allPicks.length} apostas em ${leagues} ligas`;
   renderFiltered();
   renderTop15();
-  updateClosingOdds();
-
-  // Tentar carregar análise do Worker KV
-  loadAnalysisFromWorker(forceRefresh);
-
+  updateClosingOdds(); // capture closing line for pending bets
+  // Prefetch only runs when user explicitly clicks Atualizar (forceRefresh=true)
+  if(forceRefresh){
+    setTimeout(()=>prefetchAllGames(allPicks),3000);
+    setTimeout(()=>prefetchRecentResults(),10000);
+  }
   // Se for depois das 22:00, carregar amanhã automaticamente
   if(new Date().getHours()>=22){
     setTimeout(()=>loadTomorrowGames(),5000);
-  }
-}
-
-async function loadAnalysisFromWorker(forceRefresh=false){
-  const analysisEl=document.getElementById('analysis-status');
-  try{
-    if(analysisEl){analysisEl.style.display='flex';analysisEl.innerHTML='⚡ A carregar análise...';}
-    const res=await fetch(`${WORKER_URL}/analysis`);
-    if(res.ok){
-      const data=await res.json();
-      if(data.status==='not_ready'){
-        // Análise não está pronta — usar prefetch local como fallback
-        if(analysisEl)analysisEl.innerHTML='⚡ A analisar em background...';
-        _startLocalPrefetch();
-        return;
-      }
-      // Popular caches locais com dados do Worker
-      if(data.formData){
-        Object.entries(data.formData).forEach(([tid,d])=>{
-          if(d.name){
-            formCache[d.name]=d.form||[];
-            formCache[d.name+'_formHome']=d.formHome||[];
-            formCache[d.name+'_formAway']=d.formAway||[];
-            formCache[d.name+'_tid']=parseInt(tid);
-          }
-        });
-      }
-      if(data.h2hData) Object.assign(h2hCache,data.h2hData);
-      if(data.statsData) Object.assign(teamStatsCache,data.statsData);
-      if(data.standingsData) Object.assign(standingsCache,data.standingsData);
-      if(data.predData) Object.assign(predCache,data.predData);
-      if(data.injData) Object.assign(injuryCache,data.injData);
-      if(data.advData){
-        Object.entries(data.advData).forEach(([tid,d])=>{
-          if(d.name) advancedStatsCache[`adv_${d.name}`]=d;
-        });
-      }
-      savePersistentCache();
-      renderAll();
-      if(analysisEl){
-        analysisEl.innerHTML='✅ Análise completa';
-        analysisEl.style.color='var(--accent)';
-        setTimeout(()=>{analysisEl.style.display='none';},4000);
-      }
-    }else{
-      // Worker não tem análise — fallback local
-      if(analysisEl)analysisEl.innerHTML='⚡ A analisar em background...';
-      _startLocalPrefetch();
-    }
-  }catch(e){
-    console.warn('Analysis fetch failed, falling back to local prefetch:',e.message);
-    _startLocalPrefetch();
-  }
-}
-
-function _startLocalPrefetch(){
-  if(allGames.length>0){
-    setTimeout(()=>prefetchAllGames(allGames),2000);
-    setTimeout(()=>prefetchRecentResults(),8000);
   }
 }
 
@@ -5836,12 +5697,7 @@ async function prefetchAllGames(picks){
 
   // Adaptive throttle — espera só quando a queue está sobrecarregada
   const queueDrain=()=>new Promise(r=>{
-    const deadline=Date.now()+15000; // máx 15s de espera
-    const check=()=>{
-      if(_rq.queue.length<=2&&_rq.active<=1)return r();
-      if(Date.now()>deadline)return r(); // timeout — avança na mesma
-      setTimeout(check,300);
-    };
+    const check=()=>_rq.queue.length<=2&&_rq.active<=1?r():setTimeout(check,300);
     check();
   });
 
@@ -6450,42 +6306,14 @@ function renderMarketTop10(){
 
   pool.sort((a,b)=>composite(b)-composite(a));
 
-  // DC+ Over vs Under: um jogo só aparece no que tiver melhor composite
-  // DC+ BTTS vs Não BTTS: idem
-  const overUnderWinner=new Map(); // gameKey → 'over'|'under'
-  const bttsWinner=new Map();      // gameKey → 'btts'|'bttsno'
-  pool.filter(p=>p.marketType==='combo').forEach(p=>{
-    const k=`${p.home}|${p.away}`;
-    const isOver=p.bet.includes('Over');
-    const isUnder=p.bet.includes('Under')&&!p.bet.includes('Menos');
-    const isBTTS=p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não');
-    const isBTTSNo=p.bet.includes('Não Ambas');
-    if(isOver||isUnder){
-      const cur=overUnderWinner.get(k);
-      if(!cur||composite(p)>composite(cur.pick)){
-        overUnderWinner.set(k,{type:isOver?'over':'under',pick:p});
-      }
-    }
-    if(isBTTS||isBTTSNo){
-      const cur=bttsWinner.get(k);
-      if(!cur||composite(p)>composite(cur.pick)){
-        bttsWinner.set(k,{type:isBTTS?'btts':'bttsno',pick:p});
-      }
-    }
-  });
-
   const markets=[
     {id:'top-h2h-list',   type:'h2h',     source:'top10_h2h',   label:'1X2'},
     {id:'top-totals-list',type:'totals',  source:'top10_totals',label:'O/U'},
     {id:'top-btts-list',  type:'btts',    source:'top10_btts',  label:'BTTS'},
-    {id:'top-combo-over-list', type:'combo', source:'top10_combo_over', label:'DC+ Over',
-      subFilter:p=>p.bet.includes('Over')&&overUnderWinner.get(`${p.home}|${p.away}`)?.type==='over'},
-    {id:'top-combo-under-list', type:'combo', source:'top10_combo_under', label:'DC+ Under',
-      subFilter:p=>p.bet.includes('Under')&&!p.bet.includes('Menos')&&overUnderWinner.get(`${p.home}|${p.away}`)?.type==='under'},
-    {id:'top-combo-btts-list', type:'combo', source:'top10_combo_btts', label:'DC+ BTTS',
-      subFilter:p=>p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não')&&bttsWinner.get(`${p.home}|${p.away}`)?.type==='btts'},
-    {id:'top-combo-bttsno-list', type:'combo', source:'top10_combo_bttsno', label:'DC+ Não BTTS',
-      subFilter:p=>p.bet.includes('Não Ambas')&&bttsWinner.get(`${p.home}|${p.away}`)?.type==='bttsno'},
+    {id:'top-combo-over-list', type:'combo', source:'top10_combo_over', label:'DC+ Over', subFilter:p=>p.bet.includes('Over')},
+    {id:'top-combo-under-list', type:'combo', source:'top10_combo_under', label:'DC+ Under', subFilter:p=>p.bet.includes('Under')&&!p.bet.includes('Menos')},
+    {id:'top-combo-btts-list', type:'combo', source:'top10_combo_btts', label:'DC+ BTTS', subFilter:p=>p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não')},
+    {id:'top-combo-bttsno-list', type:'combo', source:'top10_combo_bttsno', label:'DC+ Não BTTS', subFilter:p=>p.bet.includes('Não Ambas')},
     {id:'top-corners-list',type:'corners',source:'top10_corners',label:'Cantos'},
     {id:'top-ht-list',     type:'ht',     source:'top10_ht',     label:'Intervalo'},
   ];
