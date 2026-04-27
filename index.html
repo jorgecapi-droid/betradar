@@ -3634,6 +3634,25 @@ function extractPicks(game,sport){
     if(dcAway>1&&bttsYes>1) addCombo(`X2 + Ambas Marcam ✓`,pDCX2,pBTTS);
     if(dcHome>1&&bttsNo>1) addCombo(`1X + Não Ambas Marcam`,pDC1X,pBTTSNo);
     if(dcAway>1&&bttsNo>1) addCombo(`X2 + Não Ambas Marcam`,pDCX2,pBTTSNo);
+
+    // ── 1/2 + Over/Under (sem empate) ───────────────────────────
+    // Usa odds de vitória directa (1X2) em vez de DC
+    let homeWinOdd=0,awayWinOdd=0;
+    for(const bk of game.bookmakers){
+      const m=bk.markets?.find(x=>x.key==='h2h');if(!m)continue;
+      homeWinOdd=m.outcomes?.find(o=>o.name===game.home_team||o.name==='Home')?.price||0;
+      awayWinOdd=m.outcomes?.find(o=>o.name===game.away_team||o.name==='Away')?.price||0;
+      if(homeWinOdd>0&&awayWinOdd>0)break;
+    }
+    const pHomeWin=homeWinOdd>1?1/homeWinOdd:0;
+    const pAwayWin=awayWinOdd>1?1/awayWinOdd:0;
+    // p(1 ou 2) = p(home win) + p(away win) — sem empate
+    const pWinner=(pHomeWin+pAwayWin);
+    if(pWinner>0&&pWinner<1){
+      if(overOdd>1) addCombo(`1/2 + Over ${overLine}`,pWinner,pOver);
+      if(underOdd>1) addCombo(`1/2 + Under ${overLine}`,pWinner,pUnder);
+      if(bttsYes>1) addCombo(`1/2 + BTTS ✓`,pWinner,pBTTS);
+    }
   }
 
   // ── CANTOS ─────────────────────────────────────────────────────
@@ -6306,14 +6325,42 @@ function renderMarketTop10(){
 
   pool.sort((a,b)=>composite(b)-composite(a));
 
+  // DC+ Over vs Under: um jogo só aparece no que tiver melhor composite
+  // DC+ BTTS vs Não BTTS: idem
+  const overUnderWinner=new Map();
+  const bttsWinner=new Map();
+  pool.filter(p=>p.marketType==='combo').forEach(p=>{
+    const k=`${p.home}|${p.away}`;
+    const isOver=p.bet.includes('Over');
+    const isUnder=p.bet.includes('Under')&&!p.bet.includes('Menos');
+    const isBTTS=(p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não'))||(p.bet.includes('BTTS')&&!p.bet.includes('Não'));
+    const isBTTSNo=p.bet.includes('Não Ambas');
+    if(isOver||isUnder){
+      const cur=overUnderWinner.get(k);
+      if(!cur||composite(p)>composite(cur.pick)) overUnderWinner.set(k,{type:isOver?'over':'under',pick:p});
+    }
+    if(isBTTS||isBTTSNo){
+      const cur=bttsWinner.get(k);
+      if(!cur||composite(p)>composite(cur.pick)) bttsWinner.set(k,{type:isBTTS?'btts':'bttsno',pick:p});
+    }
+  });
+
   const markets=[
     {id:'top-h2h-list',   type:'h2h',     source:'top10_h2h',   label:'1X2'},
     {id:'top-totals-list',type:'totals',  source:'top10_totals',label:'O/U'},
     {id:'top-btts-list',  type:'btts',    source:'top10_btts',  label:'BTTS'},
-    {id:'top-combo-over-list', type:'combo', source:'top10_combo_over', label:'DC+ Over', subFilter:p=>p.bet.includes('Over')},
-    {id:'top-combo-under-list', type:'combo', source:'top10_combo_under', label:'DC+ Under', subFilter:p=>p.bet.includes('Under')&&!p.bet.includes('Menos')},
-    {id:'top-combo-btts-list', type:'combo', source:'top10_combo_btts', label:'DC+ BTTS', subFilter:p=>p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não')},
-    {id:'top-combo-bttsno-list', type:'combo', source:'top10_combo_bttsno', label:'DC+ Não BTTS', subFilter:p=>p.bet.includes('Não Ambas')},
+    {id:'top-combo-over-list', type:'combo', source:'top10_combo_over', label:'DC+ Over',
+      subFilter:p=>(p.bet.includes('Over')&&!p.bet.startsWith('1/2')||p.bet.startsWith('1/2')&&p.bet.includes('Over'))&&overUnderWinner.get(`${p.home}|${p.away}`)?.type==='over'},
+    {id:'top-combo-under-list', type:'combo', source:'top10_combo_under', label:'DC+ Under',
+      subFilter:p=>(p.bet.includes('Under')&&!p.bet.includes('Menos'))&&overUnderWinner.get(`${p.home}|${p.away}`)?.type==='under'},
+    {id:'top-combo-btts-list', type:'combo', source:'top10_combo_btts', label:'DC+ BTTS',
+      subFilter:p=>(p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não'))||( p.bet.startsWith('1/2')&&p.bet.includes('BTTS'))&&bttsWinner.get(`${p.home}|${p.away}`)?.type==='btts'},
+    {id:'top-combo-bttsno-list', type:'combo', source:'top10_combo_bttsno', label:'DC+ Não BTTS',
+      subFilter:p=>p.bet.includes('Não Ambas')&&bttsWinner.get(`${p.home}|${p.away}`)?.type==='bttsno'},
+    {id:'top-combo-halfover-list', type:'combo', source:'top10_combo_halfover', label:'1/2 + Over',
+      subFilter:p=>p.bet.startsWith('1/2')&&p.bet.includes('Over')},
+    {id:'top-combo-halfunder-list', type:'combo', source:'top10_combo_halfunder', label:'1/2 + Under',
+      subFilter:p=>p.bet.startsWith('1/2')&&p.bet.includes('Under')},
     {id:'top-corners-list',type:'corners',source:'top10_corners',label:'Cantos'},
     {id:'top-ht-list',     type:'ht',     source:'top10_ht',     label:'Intervalo'},
   ];
