@@ -1630,6 +1630,48 @@ async function prefetchRecentResults(){
 ['betradar_cache_v1','betradar_cache_v2','betradar_cache_v3','betradar_cache_v4','betradar_cache_v5','betradar_cache_v6','betradar_cache_v7','betradar_cache_v8','betradar_cache_v9','betradar_cache_v10','betradar_cache_v11','betradar_cache_v12','betradar_cache_v13','betradar_cache_v14','betradar_cache_v15'].forEach(k=>{try{localStorage.removeItem(k);}catch{}});
 const CALLS_SAVED_KEY='betradar_calls_saved';
 function midnightMs(){const n=new Date(),m=new Date(n);m.setHours(24,0,0,0);return m.getTime();}
+// ── BETTING DAY (06:00 Lisboa → 06:00 Lisboa do dia seguinte) ──
+// Resolve o problema de jogos sul-americanos (Libertadores, Brasileirão, MLS, etc.)
+// que começam após a meia-noite de Lisboa mas pertencem ao "matchday" do dia anterior.
+const BETTING_DAY_CUTOFF_HOUR=6; // 06:00 Lisboa
+function getBettingDayBounds(offsetDays){
+  // Lisboa "agora" — usado para escolher o dia base
+  const off=offsetDays||0;
+  const now=new Date();
+  // Construir uma data Lisboa-based: pegar na hora local Europe/Lisbon
+  const lisbonStr=now.toLocaleString('en-CA',{timeZone:'Europe/Lisbon',hour12:false}); // "YYYY-MM-DD, HH:mm:ss"
+  const[datePart,timePart]=lisbonStr.split(', ');
+  const[ly,lm,ld]=datePart.split('-').map(Number);
+  const[lh]=timePart.split(':').map(Number);
+  // Se ainda não chegou às 06:00 Lisboa, o "betting day" actual começou ontem
+  let baseY=ly,baseM=lm,baseD=ld;
+  if(lh<BETTING_DAY_CUTOFF_HOUR){
+    const d=new Date(Date.UTC(ly,lm-1,ld));d.setUTCDate(d.getUTCDate()-1);
+    baseY=d.getUTCFullYear();baseM=d.getUTCMonth()+1;baseD=d.getUTCDate();
+  }
+  // Aplicar offset (0 = hoje, 1 = amanhã, -1 = ontem)
+  if(off!==0){
+    const d=new Date(Date.UTC(baseY,baseM-1,baseD));d.setUTCDate(d.getUTCDate()+off);
+    baseY=d.getUTCFullYear();baseM=d.getUTCMonth()+1;baseD=d.getUTCDate();
+  }
+  // Construir startMs (06:00 Lisboa nesse dia) usando truque de UTC
+  const isoStart=`${baseY}-${String(baseM).padStart(2,'0')}-${String(baseD).padStart(2,'0')}T${String(BETTING_DAY_CUTOFF_HOUR).padStart(2,'0')}:00:00`;
+  // Descobrir o offset Lisboa nesse dia
+  const probe=new Date(`${baseY}-${String(baseM).padStart(2,'0')}-${String(baseD).padStart(2,'0')}T12:00:00Z`);
+  const lisbonProbe=probe.toLocaleString('en-CA',{timeZone:'Europe/Lisbon',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  // Se às 12:00 UTC em Lisboa são 13:00 → offset +1 (verão); se 12:00 → offset 0 (inverno)
+  const lisbonHour=parseInt(lisbonProbe.split(', ')[1].split(':')[0],10);
+  const utcOffsetMin=(lisbonHour-12)*60;
+  const startMs=new Date(isoStart+'Z').getTime()-utcOffsetMin*60000;
+  const endMs=startMs+24*60*60*1000;
+  return{startMs,endMs};
+}
+function inBettingDay(isoOrDate,offsetDays){
+  const t=isoOrDate instanceof Date?isoOrDate.getTime():new Date(isoOrDate).getTime();
+  if(isNaN(t))return false;
+  const{startMs,endMs}=getBettingDayBounds(offsetDays||0);
+  return t>=startMs&&t<endMs;
+}
 function smartExpiryMs(picks){
   const now=Date.now();
   const soonest=(picks||[]).reduce((min,p)=>{const t=new Date(p.commence).getTime();return t>now&&t<min?t:min;},Infinity);
@@ -2823,7 +2865,8 @@ function renderTomorrow(){
     return;
   }
   const list=document.getElementById('tomorrow-list');
-  let f=[...tomorrowGames];
+  // Excluir os jogos de madrugada que já entram nos tops de hoje (betting day = 06:00→06:00 Lisboa)
+  let f=tomorrowGames.filter(p=>inBettingDay(p.commence,1));
 
   // Dedup
   const seen=new Set();
@@ -2855,11 +2898,12 @@ function renderTomorrow(){
     default:f.sort((a,b)=>composite(b)-composite(a));
   }
 
-  // Update tab counts
-  document.getElementById('tcnt-all').textContent=tomorrowGames.length;
+  // Update tab counts (com filtro betting-day aplicado para reflectir o que é mostrado)
+  const tomBettingPool=tomorrowGames.filter(p=>inBettingDay(p.commence,1));
+  document.getElementById('tcnt-all').textContent=tomBettingPool.length;
   ['1.10-1.40','1.40-1.60','1.60-1.80','1.80-2.20','2.20-3.00','3.00+'].forEach((r,i)=>{
     const[mn,mx]=ODD_RANGES[r];
-    document.getElementById(`tcnt-${i+1}`).textContent=tomorrowGames.filter(p=>p.odd>=mn&&p.odd<mx).length;
+    document.getElementById(`tcnt-${i+1}`).textContent=tomBettingPool.filter(p=>p.odd>=mn&&p.odd<mx).length;
   });
 
   const count=f.slice(0,20).length;
@@ -2885,18 +2929,23 @@ function setWidgetDay(day,btn){
 function renderWidget(){
   const list=document.getElementById('widget-list');
   const now=Date.now();
-  const todayStr=new Date().toDateString();
-  const tomDate=new Date();tomDate.setDate(tomDate.getDate()+1);
-  const tomStr=tomDate.toDateString();
-  const targetStr=widgetDay==='today'?todayStr:tomStr;
+  const offset=widgetDay==='today'?0:1;
 
   const cached=loadCache();
-  const source=cached?.data||allGames;
+  const cacheData=cached?.data||allGames;
+  // Pool unificado: cache (ou allGames) + tomorrowGames, deduplicado.
+  // Assim os jogos da madrugada (Libertadores, Brasileirão tarde, MLS, etc.) entram nos tops do dia certo.
+  const dedup=new Map();
+  [...cacheData,...tomorrowGames].forEach(p=>{
+    const k=`${p.home}|${p.away}|${p.marketType}|${p.bet}`;
+    if(!dedup.has(k))dedup.set(k,p);
+  });
+  const source=[...dedup.values()];
+
   const seen=new Set();
   let f=source.filter(p=>{
-    const d=new Date(p.commence);
-    if(d.toDateString()!==targetStr)return false;
-    if(widgetDay==='today'&&d.getTime()<now)return false;
+    if(!inBettingDay(p.commence,offset))return false;
+    if(widgetDay==='today'&&new Date(p.commence).getTime()<now)return false;
     const k=`${p.home}|${p.away}|${p.marketType}|${p.bet}`;
     if(seen.has(k))return false;seen.add(k);return true;
   }).sort((a,b)=>composite(b)-composite(a)).slice(0,30);
@@ -3748,12 +3797,12 @@ async function fetchOdds(sport,retry=0){
     const fd1=await rf1.json();
     const fixtures=fd1?.response||[];
 
-    // Update API usage display
+    // Update API usage display (Ultra plan = 75000/dia)
     const rem=rf1.headers.get('x-ratelimit-requests-remaining');
     if(rem){
       const n=parseInt(rem);
-      const el=document.getElementById('odds-remaining');if(el){el.textContent=n;el.className=`api-val ${n>3000?'ok':n>500?'warn':'danger'}`;}
-      const fill=document.getElementById('odds-fill');if(fill)fill.style.width=`${Math.min(100,(n/7500)*100)}%`;
+      const el=document.getElementById('odds-remaining');if(el){el.textContent=n;el.className=`api-val ${n>30000?'ok':n>5000?'warn':'danger'}`;}
+      const fill=document.getElementById('odds-fill');if(fill)fill.style.width=`${Math.min(100,(n/75000)*100)}%`;
     }
 
     if(fixtures.length===0)return{games:[],ok:true,status:200};
@@ -5683,10 +5732,11 @@ async function loadGames(forceRefresh=false){
     setTimeout(()=>prefetchAllGames(allPicks),3000);
     setTimeout(()=>prefetchRecentResults(),10000);
   }
-  // Se for depois das 22:00, carregar amanhã automaticamente
-  if(new Date().getHours()>=22){
-    setTimeout(()=>loadTomorrowGames(),5000);
-  }
+  // Carregar amanhã automaticamente — necessário para jogos pós-meia-noite Lisboa
+  // (Libertadores, Brasileirão noite, MLS, Argentina, etc.) aparecerem nos tops de hoje.
+  // O filtro betting-day (06:00→06:00 Lisboa) em renderTop15/renderWidget separa os que
+  // pertencem ao dia de hoje vs. os do dia seguinte.
+  setTimeout(()=>loadTomorrowGames().then(()=>{renderTop15();renderWidget&&renderWidget();}),5000);
 }
 
 async function prefetchAllGames(picks){
@@ -6172,10 +6222,11 @@ function renderTop15(){
   const list=document.getElementById('top10-list');
   if(!list)return;
   const now=Date.now();
-  const todayStr=new Date().toDateString();
+  // Pool = jogos de hoje (allGames) + jogos da madrugada de amanhã (tomorrowGames que caem dentro do betting day de hoje)
+  const pool=[...allGames,...tomorrowGames];
 
   // Recalcular confidence com dados disponíveis antes de ordenar
-  allGames.forEach(p=>{
+  pool.forEach(p=>{
     if(p.group!=='soccer'||!p.leagueId)return;
     const hf=formCache[p.home]||[];
     const af=formCache[p.away]||[];
@@ -6188,22 +6239,28 @@ function renderTop15(){
     }
   });
 
-  const candidates=allGames.filter(p=>{
-    const d=new Date(p.commence);
-    if(d.toDateString()!==todayStr)return false;
+  // Dedup pool (jogos podem aparecer em allGames e tomorrowGames se forem os de madrugada)
+  const dedup=new Map();
+  pool.forEach(p=>{const k=`${p.home}|${p.away}|${p.bet}`;if(!dedup.has(k))dedup.set(k,p);});
+  const dedupArr=[...dedup.values()];
+
+  const candidates=dedupArr.filter(p=>{
+    if(!inBettingDay(p.commence,0))return false; // dentro do "betting day" de hoje (06:00→06:00 Lisboa)
     if(p.isFriendly||p.noOdds)return false;
-    if(d.getTime()<now-3*60*60*1000)return false;
+    const t=new Date(p.commence).getTime();
+    if(t<now-3*60*60*1000)return false;
     if(p.odd<1.50)return false;
     return true;
   }).sort((a,b)=>composite(b)-composite(a));
 
   const sorted=filterWithFallback(candidates,5);
 
-  // Indicador de progresso
-  const totalSoccer=allGames.filter(p=>p.group==='soccer'&&!p.isFriendly&&!p.noOdds&&new Date(p.commence).toDateString()===todayStr).length;
-  const withData=allGames.filter(p=>p.group==='soccer'&&!p.isFriendly&&!p.noOdds&&new Date(p.commence).toDateString()===todayStr&&hasFullData(p)).length;
+  // Indicador de progresso (mesma janela betting-day)
+  const todaySoccer=dedupArr.filter(p=>p.group==='soccer'&&!p.isFriendly&&!p.noOdds&&inBettingDay(p.commence,0));
+  const totalSoccer=todaySoccer.length;
+  const withData=todaySoccer.filter(p=>hasFullData(p)).length;
   const seenForCount=new Set();
-  const totalGames=allGames.filter(p=>p.group==='soccer'&&!p.isFriendly&&!p.noOdds&&new Date(p.commence).toDateString()===todayStr&&seenForCount.size<seenForCount.add(`${p.home}|${p.away}`).size+1).length;
+  const totalGames=todaySoccer.filter(p=>seenForCount.size<seenForCount.add(`${p.home}|${p.away}`).size+1).length;
   const prefetchDone=withData>=totalSoccer*0.8; // considera completo quando ≥80% dos jogos têm dados
   const progressBar=totalSoccer>0&&!prefetchDone?`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,229,160,.06);border:1px solid rgba(0,229,160,.15);border-radius:10px;margin-bottom:12px;font-size:11px;color:var(--text2);">
     <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
