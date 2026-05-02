@@ -1272,9 +1272,10 @@ function renderAll(){
 }
 
 // ── REQUEST QUEUE — limita concurrência para evitar 429 ──────────────
-// MAX:4 pedidos em simultâneo, mínimo 180ms entre cada pedido
-// Em caso de 429 re-enfileira com backoff (1.5s × tentativa)
-const _rq={queue:[],active:0,MAX:3,GAP:250,last:0};
+// MAX:6 pedidos em simultâneo, mínimo 150ms entre pedidos (Ultra plan = 450/min permitidos).
+// 6 paralelos × ~150ms cada = ~40 req/s teóricos, mas a queue auto-throttle para ~6.6/s sustentado (= 400/min, dentro do limite).
+// Em caso de 429 re-enfileira com backoff (4s × tentativa)
+const _rq={queue:[],active:0,MAX:6,GAP:150,last:0};
 function _rqExec({resolve,reject,url,opts,retries}){
   _rq.active++;_rq.last=Date.now();
   fetch(url,opts).then(r=>{
@@ -5764,28 +5765,46 @@ async function prefetchAllGames(picks){
     scheduleRender();
   };
 
-  // Adaptive throttle — espera só quando a queue está sobrecarregada
-  const queueDrain=()=>new Promise(r=>{
-    const check=()=>_rq.queue.length<=2&&_rq.active<=1?r():setTimeout(check,300);
-    check();
-  });
+  // Processar jogos em paralelo, em batches.
+  // A queue global (_rq, MAX:3, GAP:250ms) já limita o paralelismo real para a API,
+  // mas processar serialmente jogo-a-jogo desperdiça a capacidade da queue.
+  // Batch de 4 jogos paralelos = ~16 fetches in-flight (4 jogos × ~4 calls cada),
+  // que a queue serializa em 3 paralelos. Resultado: ~3-4× mais rápido.
+  const BATCH_SIZE=4;
+  for(let i=0;i<unique.length;i+=BATCH_SIZE){
+    const batch=unique.slice(i,i+BATCH_SIZE);
+    await Promise.all(batch.map(async pick=>{
+      try{
+        // Form (essencial)
+        const formTasks=[];
+        if(!formCache[pick.home])formTasks.push(fetchTeamForm(pick.home,pick.leagueId));
+        if(!formCache[pick.away])formTasks.push(fetchTeamForm(pick.away,pick.leagueId));
+        if(formTasks.length)await Promise.all(formTasks);
 
-  for(const pick of unique){
-    try{
-      if(!formCache[pick.home])await fetchTeamForm(pick.home,pick.leagueId);
-      if(!formCache[pick.away])await fetchTeamForm(pick.away,pick.leagueId);
-      const hTid=getTid(pick.home),aTid=getTid(pick.away);
-      if(hTid&&aTid&&!h2hCache[`${Math.min(hTid,aTid)}_${Math.max(hTid,aTid)}`]){
-        await fetchH2H(hTid,aTid);
-      }
-      if(!upcomingFixtureCache[`${pick.home}|${pick.away}`]){
-        await fetchUpcomingFixtureId(pick.home,pick.away,pick.leagueId);
-      }
-      const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
-      if(fid&&!predCache[fid]) fetchPrediction(fid);
-      await queueDrain();
-      scheduleRender();
-    }catch{}
+        const hTid=getTid(pick.home),aTid=getTid(pick.away);
+
+        // Secundárias em paralelo: H2H + stats das 2 equipas
+        const secondary=[];
+        if(hTid&&aTid){
+          const hk=Math.min(hTid,aTid),ak=Math.max(hTid,aTid);
+          if(!h2hCache[`${hk}_${ak}`])secondary.push(fetchH2H(hTid,aTid));
+        }
+        if(hTid&&!teamStatsCache[`${hTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(hTid,pick.leagueId));
+        if(aTid&&!teamStatsCache[`${aTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(aTid,pick.leagueId));
+        if(secondary.length)await Promise.all(secondary);
+
+        // Fixture ID + prediction (não bloqueante)
+        if(!upcomingFixtureCache[`${pick.home}|${pick.away}`]){
+          await fetchUpcomingFixtureId(pick.home,pick.away,pick.leagueId);
+        }
+        const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
+        if(fid&&!predCache[fid])fetchPrediction(fid).catch(()=>{}); // fire-and-forget
+
+        throttledRender();
+      }catch(e){/* skip */}
+    }));
+    // Save após cada batch — sobrevive a refresh
+    savePersistentCache();
   }
   savePersistentCache();
   // Render final garantido com todos os dados
@@ -6152,8 +6171,8 @@ async function renderFiltered(){
     rerender();
     return;
   }
-  // Process in batches of 2 with 600ms pause to avoid Cloudflare Worker rate limit
-  const batchSize=2;
+  // Process in batches of 5 (queue handles rate limiting)
+  const batchSize=5;
   for(let i=0;i<soccerPicksNeedingData.length;i+=batchSize){
     const batch=soccerPicksNeedingData.slice(i,i+batchSize);
     await Promise.all(batch.map(async(pick)=>{
@@ -6178,12 +6197,10 @@ async function renderFiltered(){
             await fetchUpcomingFixtureId(pick.home,pick.away,pick.leagueId);
             const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
             if(fid){
-              // Load prediction separately — don't block essential data
               fetchPrediction(fid).catch(()=>{});
             }
           }catch{}
         } else {
-          // Already have fixture ID — try prediction if not cached
           const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
           if(fid&&!formCache[`pred_${fid}`]){
             fetchPrediction(fid).catch(()=>{});
@@ -6192,12 +6209,8 @@ async function renderFiltered(){
       }catch(e){console.warn('async pick fetch error:',pick.home,e);}
       rerender();
     }));
-    // Save to persistent cache after each batch so data survives page refresh
     savePersistentCache();
-    // Longer pause between batches to avoid Cloudflare Worker rate limit (1000 req/min)
-    if(i+batchSize<soccerPicksNeedingData.length){
-      await new Promise(r=>setTimeout(r,1500));
-    }
+    // Sem pausa extra — a queue (_rq) já gere rate limiting
   }
   // Final save
   savePersistentCache();
