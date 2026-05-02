@@ -1252,15 +1252,27 @@ const WORKER_URL='https://betradar-proxy.jorge-capilupi.workers.dev';
 // ── DEBOUNCED RENDER GLOBAL ───────────────────────────────────────
 // Todas as chamadas a render funções passam por aqui — máx. 1 render/2s
 let _renderTimer=null;
+// _isPrefetching = true durante o prefetchAllGames para esticar o debounce
+let _isPrefetching=false;
 function scheduleRender(){
   if(_renderTimer)clearTimeout(_renderTimer);
+  // Durante prefetch, espera 5s e usa requestIdleCallback para só renderizar
+  // quando o browser estiver livre — assim a UI continua responsiva mesmo com 800+ jogos.
+  const delay=_isPrefetching?5000:1500;
   _renderTimer=setTimeout(()=>{
     _renderTimer=null;
-    renderFiltered();
-    renderTop15();
-    renderMarketTop10();
-    generateMultiples();
-  },2000);
+    const doIt=()=>{
+      renderFiltered();
+      renderTop15();
+      renderMarketTop10();
+      generateMultiples();
+    };
+    if(window.requestIdleCallback){
+      requestIdleCallback(doIt,{timeout:_isPrefetching?8000:3000});
+    } else {
+      doIt();
+    }
+  },delay);
 }
 // Render imediato (para load inicial e refresh explícito)
 function renderAll(){
@@ -1272,10 +1284,11 @@ function renderAll(){
 }
 
 // ── REQUEST QUEUE — limita concurrência para evitar 429 ──────────────
-// MAX:6 pedidos em simultâneo, mínimo 150ms entre pedidos (Ultra plan = 450/min permitidos).
-// 6 paralelos × ~150ms cada = ~40 req/s teóricos, mas a queue auto-throttle para ~6.6/s sustentado (= 400/min, dentro do limite).
+// MAX:5 pedidos em simultâneo, mínimo 180ms entre pedidos.
+// Ritmo ~5.5 req/s sustentado = ~330/min, dentro do limite Ultra de 450/min com folga.
+// Concurrency mais baixa = menos burst de processamento JS = UI mais responsiva no mobile.
 // Em caso de 429 re-enfileira com backoff (4s × tentativa)
-const _rq={queue:[],active:0,MAX:6,GAP:150,last:0};
+const _rq={queue:[],active:0,MAX:5,GAP:180,last:0};
 function _rqExec({resolve,reject,url,opts,retries}){
   _rq.active++;_rq.last=Date.now();
   fetch(url,opts).then(r=>{
@@ -5748,20 +5761,29 @@ async function prefetchAllGames(picks){
     if(seen.has(k))return false;
     seen.add(k);return true;
   });
+  // Marcar como em prefetch — aumenta debounce de scheduleRender para 5s + requestIdleCallback
+  _isPrefetching=true;
   // Mostrar indicador de análise em progresso
   const analysisEl=document.getElementById('analysis-status');
   if(analysisEl){analysisEl.style.display='flex';analysisEl.innerHTML='⚡ A analisar jogos...';}
 
-  // Throttle re-renders — máximo uma vez a cada 3s para não bloquear o browser
+  // Throttle re-renders — máximo uma vez a cada 6s durante prefetch.
+  // O contador "X/Y analisados" actualiza mais frequentemente mas é só texto leve.
   let _lastRender=0;
-  const throttledRender=()=>{
+  let _lastCounter=0;
+  const updateCounter=()=>{
     const now=Date.now();
-    if(now-_lastRender<3000)return;
-    _lastRender=now;
-    // Actualizar contador de progresso
+    if(now-_lastCounter<1500)return;
+    _lastCounter=now;
     const total=unique.length;
     const done=unique.filter(p=>hasFullData(p)).length;
     if(analysisEl)analysisEl.innerHTML=`⚡ ${done}/${total} jogos analisados`;
+  };
+  const throttledRender=()=>{
+    updateCounter();
+    const now=Date.now();
+    if(now-_lastRender<6000)return; // 6s entre re-renders pesados durante prefetch
+    _lastRender=now;
     scheduleRender();
   };
 
@@ -5805,8 +5827,12 @@ async function prefetchAllGames(picks){
     }));
     // Save após cada batch — sobrevive a refresh
     savePersistentCache();
+    // Yield ao browser entre batches — dá oportunidade de fazer paint, processar input, etc.
+    // Sem isto o JS monopoliza o main thread e a UI fica congelada.
+    await new Promise(r=>setTimeout(r,50));
   }
   savePersistentCache();
+  _isPrefetching=false; // restaura debounce normal de scheduleRender
   // Render final garantido com todos os dados
   renderAll();
   // Indicador de conclusão
