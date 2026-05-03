@@ -5796,72 +5796,78 @@ async function prefetchAllGames(picks){
   });
   // Marcar como em prefetch — bloqueia totalmente os re-renders pesados durante o trabalho.
   _isPrefetching=true;
-  // Indicador de análise em progresso
   const analysisEl=document.getElementById('analysis-status');
-  if(analysisEl){analysisEl.style.display='flex';analysisEl.innerHTML='⚡ A analisar jogos...';}
 
-  // ZERO re-renders pesados durante o prefetch — só actualizamos o contador (texto leve).
-  // Razão: cada renderTop15/renderMarketTop10/generateMultiples itera centenas de jogos,
-  // recalcula confidence, gera HTML para 100+ cards. Em mobile cada call é 1-2s.
-  // Disparar 1 a cada batch = UI completamente bloqueada.
-  let _lastCounter=0;
-  const updateCounter=()=>{
+  // Mostrar IMEDIATAMENTE o estado actual (cache de runs anteriores), antes de qualquer fetch.
+  // Se o utilizador já tem cache válido, vê desde logo "30/42 jogos com dados".
+  const updateCounter=(force=false)=>{
+    if(!analysisEl)return;
+    const total=unique.length;
+    const done=unique.filter(p=>hasFullData(p)).length;
+    analysisEl.style.display='flex';
+    analysisEl.innerHTML=`⚡ ${done}/${total} jogos com dados`;
+  };
+  let _lastCounter=Date.now();
+  const throttledUpdate=()=>{
     const now=Date.now();
     if(now-_lastCounter<2000)return;
     _lastCounter=now;
-    const total=unique.length;
-    const done=unique.filter(p=>hasFullData(p)).length;
-    if(analysisEl)analysisEl.innerHTML=`⚡ ${done}/${total} jogos analisados`;
+    updateCounter();
   };
+  updateCounter(true); // estado inicial
 
-  // Processar jogos em paralelo, em batches.
-  const BATCH_SIZE=4;
-  for(let i=0;i<unique.length;i+=BATCH_SIZE){
-    const batch=unique.slice(i,i+BATCH_SIZE);
-    await Promise.all(batch.map(async pick=>{
-      try{
-        // Form (essencial)
-        const formTasks=[];
-        if(!formCache[pick.home])formTasks.push(fetchTeamForm(pick.home,pick.leagueId));
-        if(!formCache[pick.away])formTasks.push(fetchTeamForm(pick.away,pick.leagueId));
-        if(formTasks.length)await Promise.all(formTasks);
+  try{
+    // Processar jogos em paralelo, em batches.
+    const BATCH_SIZE=4;
+    for(let i=0;i<unique.length;i+=BATCH_SIZE){
+      const batch=unique.slice(i,i+BATCH_SIZE);
+      await Promise.all(batch.map(async pick=>{
+        try{
+          // Form (essencial)
+          const formTasks=[];
+          if(!formCache[pick.home])formTasks.push(fetchTeamForm(pick.home,pick.leagueId));
+          if(!formCache[pick.away])formTasks.push(fetchTeamForm(pick.away,pick.leagueId));
+          if(formTasks.length)await Promise.all(formTasks);
 
-        const hTid=getTid(pick.home),aTid=getTid(pick.away);
+          const hTid=getTid(pick.home),aTid=getTid(pick.away);
 
-        // Secundárias em paralelo: H2H + stats das 2 equipas
-        const secondary=[];
-        if(hTid&&aTid){
-          const hk=Math.min(hTid,aTid),ak=Math.max(hTid,aTid);
-          if(!h2hCache[`${hk}_${ak}`])secondary.push(fetchH2H(hTid,aTid));
-        }
-        if(hTid&&!teamStatsCache[`${hTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(hTid,pick.leagueId));
-        if(aTid&&!teamStatsCache[`${aTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(aTid,pick.leagueId));
-        if(secondary.length)await Promise.all(secondary);
+          // Secundárias em paralelo: H2H + stats das 2 equipas
+          const secondary=[];
+          if(hTid&&aTid){
+            const hk=Math.min(hTid,aTid),ak=Math.max(hTid,aTid);
+            if(!h2hCache[`${hk}_${ak}`])secondary.push(fetchH2H(hTid,aTid));
+          }
+          if(hTid&&!teamStatsCache[`${hTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(hTid,pick.leagueId));
+          if(aTid&&!teamStatsCache[`${aTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(aTid,pick.leagueId));
+          if(secondary.length)await Promise.all(secondary);
 
-        // Fixture ID + prediction — fire-and-forget (não bloqueia o batch)
-        if(!upcomingFixtureCache[`${pick.home}|${pick.away}`]){
-          fetchUpcomingFixtureId(pick.home,pick.away,pick.leagueId).then(()=>{
+          // Fixture ID + prediction — fire-and-forget (não bloqueia o batch)
+          if(!upcomingFixtureCache[`${pick.home}|${pick.away}`]){
+            fetchUpcomingFixtureId(pick.home,pick.away,pick.leagueId).then(()=>{
+              const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
+              if(fid&&!predCache[fid])fetchPrediction(fid).catch(()=>{});
+            }).catch(()=>{});
+          } else {
             const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
             if(fid&&!predCache[fid])fetchPrediction(fid).catch(()=>{});
-          }).catch(()=>{});
-        } else {
-          const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
-          if(fid&&!predCache[fid])fetchPrediction(fid).catch(()=>{});
-        }
+          }
 
-        updateCounter();
-      }catch(e){console.warn('Prefetch error',pick.home,'vs',pick.away,e?.message);}
-    }));
-    // Save após cada batch — sobrevive a refresh
+          throttledUpdate();
+        }catch(e){console.warn('Prefetch error',pick.home,'vs',pick.away,e?.message);}
+      }));
+      savePersistentCache();
+      await new Promise(r=>setTimeout(r,50));
+    }
     savePersistentCache();
-    // Yield ao browser entre batches
-    await new Promise(r=>setTimeout(r,50));
+  } catch(e){
+    console.warn('prefetchAllGames fatal:',e?.message);
+  } finally {
+    // GARANTIR cleanup mesmo se houver erro fatal
+    _isPrefetching=false;
+    updateCounter(true); // estado final
   }
-  savePersistentCache();
-  _isPrefetching=false; // libertar para render final
 
-  // ÚNICO render pesado, no fim, com todos os dados.
-  // Usamos requestIdleCallback para dar prioridade a qualquer interacção do user.
+  // Render final único, com requestIdleCallback para não competir com user
   const finalRender=()=>{
     renderAll();
     if(analysisEl){
@@ -6345,7 +6351,9 @@ function renderTop15(){
     </div>`:'';
     const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
     const pred=fid?predCache[fid]:null;
-    const predRow=pred?`<div style="font-size:10px;color:var(--muted);margin-top:3px;">API: 🏠${pred.winPct?.home||'?'}% Emp ${pred.winPct?.draw||'?'}% ✈️${pred.winPct?.away||'?'}%</div>`:'';
+    // API devolve percent como string "45%" — strip antes de re-adicionar
+    const stripPct=v=>v?String(v).replace(/%/g,''):'?';
+    const predRow=pred?`<div style="font-size:10px;color:var(--muted);margin-top:3px;">API: 🏠${stripPct(pred.winPct?.home)}% Emp ${stripPct(pred.winPct?.draw)}% ✈️${stripPct(pred.winPct?.away)}%</div>`:'';
 
     return`<div class="top10-card ${added?'added':''}" style="animation-delay:${i*0.05}s;">
       <!-- Linha 1: medalha + equipas + odd -->
