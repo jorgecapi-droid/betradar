@@ -3190,18 +3190,22 @@ function calcXG(hs, as_, isHomePerspective, hName, aName){
   }
   // Fallback: goals-based xG (Dixon-Coles simplified)
   if(!hs||!as_)return null;
+  const num=v=>{const n=parseFloat(v);return isNaN(n)?0:n;};
   const leagueAvgFor=1.35,leagueAvgAgainst=1.35;
-  const hAttack=(hs.goalsForAvgHome||leagueAvgFor)/leagueAvgFor;
-  const hDefense=(hs.goalsAgainstAvgHome||leagueAvgAgainst)/leagueAvgAgainst;
-  const aAttack=(as_.goalsForAvgAway||leagueAvgFor)/leagueAvgFor;
-  const aDefense=(as_.goalsAgainstAvgAway||leagueAvgAgainst)/leagueAvgAgainst;
+  const hAttack=(num(hs.goalsForAvgHome)||leagueAvgFor)/leagueAvgFor;
+  const hDefense=(num(hs.goalsAgainstAvgHome)||leagueAvgAgainst)/leagueAvgAgainst;
+  const aAttack=(num(as_.goalsForAvgAway)||leagueAvgFor)/leagueAvgFor;
+  const aDefense=(num(as_.goalsAgainstAvgAway)||leagueAvgAgainst)/leagueAvgAgainst;
   const homeAdv=1.25;
   const hXG=parseFloat((hAttack*aDefense*leagueAvgFor*homeAdv).toFixed(2));
   const aXG=parseFloat((aAttack*hDefense*leagueAvgFor).toFixed(2));
-  const hCSRate=Math.min((hs.cleanSheetsHome||0)/Math.max(hs.winsHome+hs.drawsHome+1,5),0.45);
-  const aCSRate=Math.min((as_.cleanSheetsAway||0)/Math.max(as_.winsAway+as_.drawsAway+1,5),0.45);
+  const hWins=num(hs.winsHome),hDraws=num(hs.drawsHome);
+  const aWins=num(as_.winsAway),aDraws=num(as_.drawsAway);
+  const hCSRate=Math.min(num(hs.cleanSheetsHome)/Math.max(hWins+hDraws+1,5),0.45);
+  const aCSRate=Math.min(num(as_.cleanSheetsAway)/Math.max(aWins+aDraws+1,5),0.45);
   const hXGAdj=parseFloat((hXG*(1-aCSRate*0.3)).toFixed(2));
   const aXGAdj=parseFloat((aXG*(1-hCSRate*0.3)).toFixed(2));
+  if(isNaN(hXGAdj)||isNaN(aXGAdj))return null;
   return{home:hXGAdj,away:aXGAdj,total:parseFloat((hXGAdj+aXGAdj).toFixed(2)),source:'goals'};
 }
 
