@@ -5626,7 +5626,97 @@ async function fetchFriendlies(){
   }catch{return[];}
 }
 
+// ── WORKER ANALYSIS LOADER ─────────────────────────────────────────────
+// O Worker já corre o cron 5×/dia e faz toda a análise pesada (form, H2H, stats,
+// predictions, advanced stats) para todos os jogos do dia. Em vez de o front-end
+// repetir todas essas calls (4000+ por sessão), lê o `/analysis` e popula os caches
+// locais com os dados já mastigados. Resultado: app abre com tudo pronto.
+async function loadWorkerAnalysis(){
+  try{
+    const res=await fetch(`${WORKER_URL}/analysis`);
+    if(res.status===202){console.log('Worker analysis not ready yet');return false;}
+    if(!res.ok){console.warn('Worker /analysis failed:',res.status);return false;}
+    const data=await res.json();
+    if(!data||!data.formData){console.warn('Worker /analysis empty');return false;}
+
+    // 1. formData (indexada por team ID) → formCache (indexada por nome de equipa)
+    let formCount=0;
+    Object.values(data.formData||{}).forEach(d=>{
+      if(!d?.name||!d?.form)return;
+      formCache[d.name]=d.form;
+      if(d.formHome)formCache[d.name+'_formHome']=d.formHome;
+      if(d.formAway)formCache[d.name+'_formAway']=d.formAway;
+      if(d.tid)formCache[d.name+'_tid']=d.tid;
+      // Stats derivados (attackAvg, defenseAvg, cleanSheets, etc.) — guardar em
+      // formCache[name+'_stats'] que o hasFullData já reconhece como fallback.
+      formCache[d.name+'_stats']={
+        goalsFor:d.attackAvg||0,
+        goalsAgainst:d.defenseAvg||0,
+        cleanSheets:d.cleanSheets||0,
+        bttsCount:d.bttsCount||0,
+        n:d.gamesAnalyzed||0,
+        attackAvgHome:d.attackAvgHome||0,
+        defenseAvgHome:d.defenseAvgHome||0,
+        attackAvgAway:d.attackAvgAway||0,
+        defenseAvgAway:d.defenseAvgAway||0,
+      };
+      formCount++;
+    });
+
+    // 2. statsData (chave `${tid}_${lid}`) → teamStatsCache (mesma chave)
+    let statsCount=0;
+    Object.entries(data.statsData||{}).forEach(([k,v])=>{
+      if(v){teamStatsCache[k]=v;statsCount++;}
+    });
+
+    // 3. h2hData (chave `${minId}_${maxId}`) → h2hCache (mesma chave)
+    let h2hCount=0;
+    Object.entries(data.h2hData||{}).forEach(([k,v])=>{
+      if(v){h2hCache[k]=v;h2hCount++;}
+    });
+
+    // 4. predData (chave fixture id) → predCache (mesma chave)
+    let predCount=0;
+    Object.entries(data.predData||{}).forEach(([k,v])=>{
+      if(v){predCache[k]=v;predCount++;}
+    });
+
+    // 5. standingsData (chave `${lid}_${season}`) → standingsCache
+    let standCount=0;
+    Object.entries(data.standingsData||{}).forEach(([k,v])=>{
+      if(v){standingsCache[k]=v;standCount++;}
+    });
+
+    // 6. injData → injuryCache
+    Object.entries(data.injData||{}).forEach(([k,v])=>{
+      if(v)injuryCache[k]=v;
+    });
+
+    // 7. advData (chave team ID) → advancedStatsCache (chave `adv_${name}`)
+    // Precisa do nome — usar formData para mapear.
+    if(data.advData){
+      Object.entries(data.advData).forEach(([tid,v])=>{
+        if(!v)return;
+        const formEntry=data.formData?.[tid];
+        if(formEntry?.name)advancedStatsCache[`adv_${formEntry.name}`]=v;
+      });
+    }
+
+    // Persistir caches no localStorage para sobreviver a refresh
+    savePersistentCache();
+    console.log(`Worker analysis loaded: form=${formCount}, stats=${statsCount}, h2h=${h2hCount}, pred=${predCount}, standings=${standCount}`);
+    return true;
+  }catch(e){
+    console.warn('loadWorkerAnalysis error:',e?.message);
+    return false;
+  }
+}
+
 async function loadGames(forceRefresh=false){
+  // Primeiro: carregar análise pré-mastigada do Worker. Esta call é leve (~5MB blob)
+  // mas substitui ~4000 chamadas individuais à API. Roda em paralelo com o resto do
+  // load por isso não atrasa nada.
+  const workerAnalysisPromise=loadWorkerAnalysis();
   const btn=document.getElementById('refresh-btn');
   const loading=document.getElementById('loading-state');
   const errorDiv=document.getElementById('error-state');
@@ -5771,11 +5861,31 @@ async function loadGames(forceRefresh=false){
   document.getElementById('leagues-ok').textContent=leaguesOk;
   summBar.style.display='flex';
   document.getElementById('games-count').textContent=`${allPicks.length} apostas em ${leagues} ligas`;
+
+  // Esperar pela análise do Worker antes de renderizar pela primeira vez.
+  // Se o Worker já tiver respondido, instantâneo. Senão, espera no máximo 8s
+  // (timeout) — entretanto mostra render sem dados, e quando vier re-render.
+  const workerLoaded=await Promise.race([
+    workerAnalysisPromise,
+    new Promise(r=>setTimeout(()=>r(false),8000))
+  ]);
+
   renderFiltered();
   renderTop15();
-  updateClosingOdds(); // capture closing line for pending bets
-  // Prefetch only runs when user explicitly clicks Atualizar (forceRefresh=true)
-  if(forceRefresh){
+  updateClosingOdds();
+  // O Worker já fez todo o prefetch pesado no cron. Só precisamos de prefetch local
+  // se: (a) o user clicou Atualizar OU (b) o Worker não tem análise pronta E o cache local também não.
+  const seenGameIds=new Set();
+  const todayGamesUnique=allPicks.filter(p=>{
+    if(p.group!=='soccer'||!p.leagueId||!inBettingDay(p.commence,0))return false;
+    const k=`${p.home}|${p.away}`;
+    if(seenGameIds.has(k))return false;
+    seenGameIds.add(k);return true;
+  });
+  const withDataCount=todayGamesUnique.filter(p=>hasFullData(p)).length;
+  const cacheCoverage=todayGamesUnique.length>0?withDataCount/todayGamesUnique.length:1;
+  if(forceRefresh||(!workerLoaded&&cacheCoverage<0.3)){
+    console.log(`Prefetch dispatch: force=${forceRefresh}, workerOK=${workerLoaded}, coverage=${(cacheCoverage*100).toFixed(0)}%`);
     setTimeout(()=>prefetchAllGames(allPicks),3000);
     setTimeout(()=>prefetchRecentResults(),10000);
   }
@@ -6296,18 +6406,24 @@ function renderTop15(){
 
   const sorted=filterWithFallback(candidates,5);
 
-  // Indicador de progresso (mesma janela betting-day)
-  const todaySoccer=dedupArr.filter(p=>p.group==='soccer'&&!p.isFriendly&&!p.noOdds&&inBettingDay(p.commence,0));
+  // Indicador de progresso — contar JOGOS únicos (não picks!).
+  // Cada jogo aparece com múltiplos markets (1X2, O/U, BTTS, Cantos, Cards) → dedup por home|away.
+  const seenForCount=new Set();
+  const todaySoccer=dedupArr.filter(p=>{
+    if(p.group!=='soccer'||p.isFriendly||p.noOdds||!p.leagueId)return false;
+    if(!inBettingDay(p.commence,0))return false;
+    const k=`${p.home}|${p.away}`;
+    if(seenForCount.has(k))return false;
+    seenForCount.add(k);return true;
+  });
   const totalSoccer=todaySoccer.length;
   const withData=todaySoccer.filter(p=>hasFullData(p)).length;
-  const seenForCount=new Set();
-  const totalGames=todaySoccer.filter(p=>seenForCount.size<seenForCount.add(`${p.home}|${p.away}`).size+1).length;
-  const prefetchDone=withData>=totalSoccer*0.8; // considera completo quando ≥80% dos jogos têm dados
+  const prefetchDone=totalSoccer>0&&withData>=totalSoccer*0.8;
   const progressBar=totalSoccer>0&&!prefetchDone?`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,229,160,.06);border:1px solid rgba(0,229,160,.15);border-radius:10px;margin-bottom:12px;font-size:11px;color:var(--text2);">
     <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
       <div style="height:100%;width:${Math.round(withData/totalSoccer*100)}%;background:var(--accent);border-radius:2px;transition:width .4s;"></div>
     </div>
-    <span style="color:var(--accent);font-weight:600;white-space:nowrap;">⚡ ${withData}/${totalSoccer} jogos analisados</span>
+    <span style="color:var(--accent);font-weight:600;white-space:nowrap;">⚡ ${withData}/${totalSoccer} jogos com dados</span>
   </div>`:'';
 
   // Best pick per match
