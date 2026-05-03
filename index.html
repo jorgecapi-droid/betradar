@@ -1252,13 +1252,12 @@ const WORKER_URL='https://betradar-proxy.jorge-capilupi.workers.dev';
 // ── DEBOUNCED RENDER GLOBAL ───────────────────────────────────────
 // Todas as chamadas a render funções passam por aqui — máx. 1 render/2s
 let _renderTimer=null;
-// _isPrefetching = true durante o prefetchAllGames para esticar o debounce
+// _isPrefetching = true durante o prefetchAllGames — bloqueia totalmente os re-renders pesados.
+// Só o render final no fim do prefetch é executado.
 let _isPrefetching=false;
 function scheduleRender(){
+  if(_isPrefetching)return; // ignorar pedidos durante prefetch para não bloquear UI
   if(_renderTimer)clearTimeout(_renderTimer);
-  // Durante prefetch, espera 5s e usa requestIdleCallback para só renderizar
-  // quando o browser estiver livre — assim a UI continua responsiva mesmo com 800+ jogos.
-  const delay=_isPrefetching?5000:1500;
   _renderTimer=setTimeout(()=>{
     _renderTimer=null;
     const doIt=()=>{
@@ -1268,11 +1267,11 @@ function scheduleRender(){
       generateMultiples();
     };
     if(window.requestIdleCallback){
-      requestIdleCallback(doIt,{timeout:_isPrefetching?8000:3000});
+      requestIdleCallback(doIt,{timeout:3000});
     } else {
       doIt();
     }
-  },delay);
+  },1500);
 }
 // Render imediato (para load inicial e refresh explícito)
 function renderAll(){
@@ -5761,37 +5760,27 @@ async function prefetchAllGames(picks){
     if(seen.has(k))return false;
     seen.add(k);return true;
   });
-  // Marcar como em prefetch — aumenta debounce de scheduleRender para 5s + requestIdleCallback
+  // Marcar como em prefetch — bloqueia totalmente os re-renders pesados durante o trabalho.
   _isPrefetching=true;
-  // Mostrar indicador de análise em progresso
+  // Indicador de análise em progresso
   const analysisEl=document.getElementById('analysis-status');
   if(analysisEl){analysisEl.style.display='flex';analysisEl.innerHTML='⚡ A analisar jogos...';}
 
-  // Throttle re-renders — máximo uma vez a cada 6s durante prefetch.
-  // O contador "X/Y analisados" actualiza mais frequentemente mas é só texto leve.
-  let _lastRender=0;
+  // ZERO re-renders pesados durante o prefetch — só actualizamos o contador (texto leve).
+  // Razão: cada renderTop15/renderMarketTop10/generateMultiples itera centenas de jogos,
+  // recalcula confidence, gera HTML para 100+ cards. Em mobile cada call é 1-2s.
+  // Disparar 1 a cada batch = UI completamente bloqueada.
   let _lastCounter=0;
   const updateCounter=()=>{
     const now=Date.now();
-    if(now-_lastCounter<1500)return;
+    if(now-_lastCounter<2000)return;
     _lastCounter=now;
     const total=unique.length;
     const done=unique.filter(p=>hasFullData(p)).length;
     if(analysisEl)analysisEl.innerHTML=`⚡ ${done}/${total} jogos analisados`;
   };
-  const throttledRender=()=>{
-    updateCounter();
-    const now=Date.now();
-    if(now-_lastRender<6000)return; // 6s entre re-renders pesados durante prefetch
-    _lastRender=now;
-    scheduleRender();
-  };
 
   // Processar jogos em paralelo, em batches.
-  // A queue global (_rq, MAX:3, GAP:250ms) já limita o paralelismo real para a API,
-  // mas processar serialmente jogo-a-jogo desperdiça a capacidade da queue.
-  // Batch de 4 jogos paralelos = ~16 fetches in-flight (4 jogos × ~4 calls cada),
-  // que a queue serializa em 3 paralelos. Resultado: ~3-4× mais rápido.
   const BATCH_SIZE=4;
   for(let i=0;i<unique.length;i+=BATCH_SIZE){
     const batch=unique.slice(i,i+BATCH_SIZE);
@@ -5822,24 +5811,31 @@ async function prefetchAllGames(picks){
         const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
         if(fid&&!predCache[fid])fetchPrediction(fid).catch(()=>{}); // fire-and-forget
 
-        throttledRender();
+        updateCounter(); // só texto, MUITO leve
       }catch(e){/* skip */}
     }));
     // Save após cada batch — sobrevive a refresh
     savePersistentCache();
-    // Yield ao browser entre batches — dá oportunidade de fazer paint, processar input, etc.
-    // Sem isto o JS monopoliza o main thread e a UI fica congelada.
+    // Yield ao browser entre batches
     await new Promise(r=>setTimeout(r,50));
   }
   savePersistentCache();
-  _isPrefetching=false; // restaura debounce normal de scheduleRender
-  // Render final garantido com todos os dados
-  renderAll();
-  // Indicador de conclusão
-  if(analysisEl){
-    analysisEl.innerHTML='✅ Análise completa';
-    analysisEl.style.color='var(--accent)';
-    setTimeout(()=>{analysisEl.style.display='none';},4000);
+  _isPrefetching=false; // libertar para render final
+
+  // ÚNICO render pesado, no fim, com todos os dados.
+  // Usamos requestIdleCallback para dar prioridade a qualquer interacção do user.
+  const finalRender=()=>{
+    renderAll();
+    if(analysisEl){
+      analysisEl.innerHTML='✅ Análise completa';
+      analysisEl.style.color='var(--accent)';
+      setTimeout(()=>{analysisEl.style.display='none';},4000);
+    }
+  };
+  if(window.requestIdleCallback){
+    requestIdleCallback(finalRender,{timeout:5000});
+  } else {
+    setTimeout(finalRender,100);
   }
 }
 
@@ -6197,49 +6193,11 @@ async function renderFiltered(){
     rerender();
     return;
   }
-  // Process in batches of 5 (queue handles rate limiting)
-  const batchSize=5;
-  for(let i=0;i<soccerPicksNeedingData.length;i+=batchSize){
-    const batch=soccerPicksNeedingData.slice(i,i+batchSize);
-    await Promise.all(batch.map(async(pick)=>{
-      try{
-        // Essential: form (needed for all analysis)
-        if(!formCache[pick.home]||formCache[pick.home].length===0||!formCache[pick.away]||formCache[pick.away].length===0){
-          await Promise.all([
-            fetchTeamForm(pick.home,pick.leagueId),
-            fetchTeamForm(pick.away,pick.leagueId)
-          ]);
-        }
-        const hTid=getTid(pick.home),aTid=getTid(pick.away);
-        // Secondary: stats + H2H (needed for xG and detailed analysis)
-        const secondary=[];
-        if(hTid&&aTid&&!h2hCache[`${hTid}_${aTid}`])secondary.push(fetchH2H(hTid,aTid));
-        if(hTid&&!teamStatsCache[`${hTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(hTid,pick.leagueId));
-        if(aTid&&!teamStatsCache[`${aTid}_${pick.leagueId}`])secondary.push(fetchTeamStats(aTid,pick.leagueId));
-        if(secondary.length)await Promise.all(secondary);
-        // Optional: fixture ID + prediction (load after essentials)
-        if(!upcomingFixtureCache[`${pick.home}|${pick.away}`]){
-          try{
-            await fetchUpcomingFixtureId(pick.home,pick.away,pick.leagueId);
-            const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
-            if(fid){
-              fetchPrediction(fid).catch(()=>{});
-            }
-          }catch{}
-        } else {
-          const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`];
-          if(fid&&!formCache[`pred_${fid}`]){
-            fetchPrediction(fid).catch(()=>{});
-          }
-        }
-      }catch(e){console.warn('async pick fetch error:',pick.home,e);}
-      rerender();
-    }));
-    savePersistentCache();
-    // Sem pausa extra — a queue (_rq) já gere rate limiting
-  }
-  // Final save
-  savePersistentCache();
+  // NOTA: anteriormente havia aqui um loop de prefetch duplicado que corria em paralelo
+  // com o prefetchAllGames (lançado em background no loadGames). Isso dobrava o trabalho
+  // da rede, da queue, e disparava re-renders concorrentes que congelavam a UI.
+  // Removido — o prefetchAllGames trata de tudo. Quando ele acabar, renderAll() é chamado
+  // e esta função (renderFiltered) corre uma vez mais com todos os dados.
 }
 
 // ── DATE & COUNTDOWN ─────────────────────────────────────────────
