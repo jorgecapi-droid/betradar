@@ -5647,18 +5647,17 @@ async function loadWorkerAnalysis(){
       if(d.formHome)formCache[d.name+'_formHome']=d.formHome;
       if(d.formAway)formCache[d.name+'_formAway']=d.formAway;
       if(d.tid)formCache[d.name+'_tid']=d.tid;
-      // Stats derivados (attackAvg, defenseAvg, cleanSheets, etc.) — guardar em
-      // formCache[name+'_stats'] que o hasFullData já reconhece como fallback.
+      // Stats derivados — usar nomes que o front-end espera (goalsForAvg / goalsAgainstAvg, etc.)
       formCache[d.name+'_stats']={
-        goalsFor:d.attackAvg||0,
-        goalsAgainst:d.defenseAvg||0,
-        cleanSheets:d.cleanSheets||0,
-        bttsCount:d.bttsCount||0,
-        n:d.gamesAnalyzed||0,
-        attackAvgHome:d.attackAvgHome||0,
-        defenseAvgHome:d.defenseAvgHome||0,
-        attackAvgAway:d.attackAvgAway||0,
-        defenseAvgAway:d.defenseAvgAway||0,
+        goalsForAvg: d.attackAvg||0,
+        goalsAgainstAvg: d.defenseAvg||0,
+        goalsForAvgHome: d.attackAvgHome||0,
+        goalsAgainstAvgHome: d.defenseAvgHome||0,
+        goalsForAvgAway: d.attackAvgAway||0,
+        goalsAgainstAvgAway: d.defenseAvgAway||0,
+        cleanSheets: d.cleanSheets||0,
+        bttsCount: d.bttsCount||0,
+        n: d.gamesAnalyzed||0,
       };
       formCount++;
     });
