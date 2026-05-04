@@ -5776,17 +5776,90 @@ async function loadGames(forceRefresh=false){
   document.getElementById('cache-text').innerHTML='A carregar dados da API...';
 
   let allPicks=[],leaguesOk=0,leaguesSkip=0,apiErrors=0;
-  for(let i=0;i<SPORTS.length;i++){
-    const sport=SPORTS[i];
-    document.getElementById('loader-step').textContent=`${sport.label} (${i+1}/${SPORTS.length})`;
-    progress.style.width=`${Math.round(((i+1)/SPORTS.length)*100)}%`;
-    const{games,ok,status}=await fetchOdds(sport);
-    if(ok&&games.length>0)leaguesOk++;
-    else{leaguesSkip++;if(status===401||status===429||status===0)apiErrors++;}
-    for(const g of games)allPicks.push(...extractPicks(g,sport));
-    // Adaptive delay — faster normally, slower after 429
-    await new Promise(r=>setTimeout(r,status===429?2000:200));
+
+  // OPTIMIZAÇÃO: em vez de 73 calls (uma por liga), fazer 2 calls globais por
+  // /fixtures?date= e /odds?date= sem filtro de liga. Filtramos client-side pelas
+  // 73 ligas em SPORTS. Reduz drasticamente o nº de calls e evita rate-limits.
+  document.getElementById('loader-step').textContent='Buscar fixtures globais...';
+  progress.style.width='30%';
+  try{
+    const now=new Date();
+    const season=now.getMonth()<7?now.getFullYear()-1:now.getFullYear();
+    const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Lisbon'});
+    const headers={'x-apisports-key':getFormKey()};
+    const allowedLids=new Set(SPORTS.map(s=>s.lid).filter(Boolean));
+    const lidToSport={}; SPORTS.forEach(s=>{if(s.lid)lidToSport[s.lid]=s;});
+
+    // 1 call global para fixtures
+    const rfG=await apiFetch(`${FORM_BASE}/fixtures?date=${today}&timezone=Europe/Lisbon`,{headers});
+    const fdG=await rfG.json();
+    const allFixtures=(fdG?.response||[]).filter(f=>allowedLids.has(f.league?.id));
+    // Update API usage display
+    const rem=rfG.headers.get('x-ratelimit-requests-remaining');
+    if(rem){const n=parseInt(rem);const el=document.getElementById('odds-remaining');if(el){el.textContent=n;el.className=`api-val ${n>30000?'ok':n>5000?'warn':'danger'}`;}const fill=document.getElementById('odds-fill');if(fill)fill.style.width=`${Math.min(100,(n/75000)*100)}%`;}
+
+    // Popular fixtureMap e formCache _tid
+    const fixtureMap={}; const fixturesByLid={};
+    allFixtures.forEach(f=>{
+      const id=f.fixture?.id, lid=f.league?.id;
+      const homeId=f.teams?.home?.id, awayId=f.teams?.away?.id;
+      const homeName=f.teams?.home?.name, awayName=f.teams?.away?.name;
+      if(!id||!lid||!homeName||!awayName)return;
+      fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date,status:f.fixture?.status?.short,homeId,awayId,lid};
+      if(homeId){formCache[homeName+'_tid']=homeId;if(!formCache[homeName])formCache[homeName]=[];}
+      if(awayId){formCache[awayName+'_tid']=awayId;if(!formCache[awayName])formCache[awayName]=[];}
+      upcomingFixtureCache[`${homeName}|${awayName}`]=id;
+      if(!fixturesByLid[lid])fixturesByLid[lid]=[];
+      fixturesByLid[lid].push(id);
+    });
+
+    progress.style.width='60%';
+    document.getElementById('loader-step').textContent='Buscar odds...';
+
+    // Para cada liga com jogos, fazer 1 call de odds (não dá para fazer global em /odds)
+    const lidsWithGames=Object.keys(fixturesByLid);
+    const oddsMap={};
+    for(let i=0;i<lidsWithGames.length;i++){
+      const lid=lidsWithGames[i];
+      progress.style.width=`${60+Math.round((i/lidsWithGames.length)*30)}%`;
+      try{
+        const ro=await apiFetch(`${FORM_BASE}/odds?league=${lid}&season=${season}&date=${today}&timezone=Europe/Lisbon`,{headers});
+        if(ro.ok){
+          const od=await ro.json();
+          (od?.response||[]).forEach(item=>{const id=item.fixture?.id;if(id)oddsMap[id]=item.bookmakers||[];});
+        }
+        leaguesOk++;
+      }catch{leaguesSkip++;}
+      await new Promise(r=>setTimeout(r,150));
+    }
+
+    // Construir picks por sport (liga)
+    for(const sport of SPORTS){
+      if(!sport.lid)continue;
+      const lidFixtures=fixturesByLid[sport.lid]||[];
+      if(!lidFixtures.length)continue;
+      const games=lidFixtures.map(id=>{
+        const fix=fixtureMap[id];
+        return{id:`af_${id}`,home_team:fix.home,away_team:fix.away,commence_time:fix.date,bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],fix.home,fix.away):[]};
+      });
+      for(const g of games)allPicks.push(...extractPicks(g,sport));
+    }
+  }catch(e){
+    console.warn('Global fixtures fetch failed, fallback to per-league:',e);
+    apiErrors++;
+    // Fallback: usar o método antigo (por se a API não suportar a query global)
+    for(let i=0;i<SPORTS.length;i++){
+      const sport=SPORTS[i];
+      document.getElementById('loader-step').textContent=`${sport.label} (${i+1}/${SPORTS.length})`;
+      progress.style.width=`${Math.round(((i+1)/SPORTS.length)*100)}%`;
+      const{games,ok,status}=await fetchOdds(sport);
+      if(ok&&games.length>0)leaguesOk++;
+      else{leaguesSkip++;if(status===401||status===429||status===0)apiErrors++;}
+      for(const g of games)allPicks.push(...extractPicks(g,sport));
+      await new Promise(r=>setTimeout(r,status===429?2000:200));
+    }
   }
+  progress.style.width='100%';
 
   loading.style.display='none';btn.classList.remove('loading');
 
@@ -6419,6 +6492,19 @@ function renderTop15(){
     if(seenForCount.has(k))return false;
     seenForCount.add(k);return true;
   });
+  // DEBUG: imprimir lista para ver quais jogos não têm dados
+  if(window._debugProgress){
+    const missing=todaySoccer.filter(p=>!hasFullData(p));
+    console.log(`[Progress] ${todaySoccer.length} jogos hoje, ${todaySoccer.length-missing.length} com dados, ${missing.length} sem:`);
+    missing.forEach(p=>{
+      const hf=(formCache[p.home]||[]).length;
+      const af=(formCache[p.away]||[]).length;
+      const hTid=getTid(p.home),aTid=getTid(p.away);
+      const hs=teamStatsCache[`${hTid}_${p.leagueId}`];
+      const as_=teamStatsCache[`${aTid}_${p.leagueId}`];
+      console.log(`  ❌ ${p.home}(form=${hf},tid=${hTid},stats=${!!hs}) vs ${p.away}(form=${af},tid=${aTid},stats=${!!as_}) [lid=${p.leagueId}]`);
+    });
+  }
   const totalSoccer=todaySoccer.length;
   const withData=todaySoccer.filter(p=>hasFullData(p)).length;
   const prefetchDone=totalSoccer>0&&withData>=totalSoccer*0.8;
