@@ -2175,8 +2175,19 @@ function calcConfidence(pick, hf=[], af=[], hs=null, as_=null){
 
   // ── 6. MODELO xG / ESTATÍSTICAS (0-3 pts) ───────────────────
   if(pick.group==='soccer'){
-    const hfs=hs||{goalsForAvgHome:formCache[pick.home+'_stats']?.goalsForAvg||0,goalsAgainstAvgHome:formCache[pick.home+'_stats']?.goalsAgainstAvg||0,cleanSheetsHome:0,winsHome:0,drawsHome:0};
-    const ass_=as_||{goalsForAvgAway:formCache[pick.away+'_stats']?.goalsForAvg||0,goalsAgainstAvgAway:formCache[pick.away+'_stats']?.goalsAgainstAvg||0,cleanSheetsAway:0,winsAway:0};
+    // Fallback: usar stats home/away melhorados do worker (com fallback para média global se não houver sample)
+    const hWorkerStats=formCache[pick.home+'_stats'];
+    const aWorkerStats=formCache[pick.away+'_stats'];
+    const hfs=hs||(hWorkerStats?{
+      goalsForAvgHome: hWorkerStats.goalsForAvgHome||hWorkerStats.goalsForAvg||0,
+      goalsAgainstAvgHome: hWorkerStats.goalsAgainstAvgHome||hWorkerStats.goalsAgainstAvg||0,
+      cleanSheetsHome:0,winsHome:0,drawsHome:0
+    }:{goalsForAvgHome:0,goalsAgainstAvgHome:0,cleanSheetsHome:0,winsHome:0,drawsHome:0});
+    const ass_=as_||(aWorkerStats?{
+      goalsForAvgAway: aWorkerStats.goalsForAvgAway||aWorkerStats.goalsForAvg||0,
+      goalsAgainstAvgAway: aWorkerStats.goalsAgainstAvgAway||aWorkerStats.goalsAgainstAvg||0,
+      cleanSheetsAway:0,winsAway:0
+    }:{goalsForAvgAway:0,goalsAgainstAvgAway:0,cleanSheetsAway:0,winsAway:0});
     const xg=calcXG(hfs,ass_,betSide(pick)==='home',pick.home,pick.away);
     if(xg){
       if(pick.marketType==='totals'){
@@ -3102,6 +3113,13 @@ function hasFullData(pick){
   const as_=teamStatsCache[`${getTid(pick.away)}_${pick.leagueId}`]||formCache[pick.away+'_stats'];
   return hf.length>0&&af.length>0&&(hs||as_);
 }
+// Verifica se uma das equipas do pick tem sample insuficiente (gamesAnalyzed < 3)
+function pickIsLowConfidence(pick){
+  if(pick&&pick.lowConfidence===true)return true; // flag direta vinda do worker
+  const hStats=formCache[(pick.home||'')+'_stats'];
+  const aStats=formCache[(pick.away||'')+'_stats'];
+  return (hStats?.lowConfidence===true)||(aStats?.lowConfidence===true);
+}
 function hasPartialData(pick){
   const hf=formCache[pick.home]||[];
   const af=formCache[pick.away]||[];
@@ -3383,16 +3401,16 @@ function genAI(pick,hf,af,hs,as_){
     }
   }
 
-  // Stats — use teamStatsCache first, fall back to form-derived stats
+  // Stats — use teamStatsCache first, fall back to form-derived stats com splits home/away melhorados
   const hFormStats=formCache[pick.home+'_stats'];
   const aFormStats=formCache[pick.away+'_stats'];
   const hSrc=hs||hFormStats;
   const aSrc=as_||aFormStats;
   if(pick.group==='soccer'&&hSrc){
-    const hGF=hs?.goalsForAvgHome||hFormStats?.goalsForAvg||0;
-    const hGA=hs?.goalsAgainstAvgHome||hFormStats?.goalsAgainstAvg||0;
-    const aGF=as_?.goalsForAvgAway||aFormStats?.goalsForAvg||0;
-    const aGA=as_?.goalsAgainstAvgAway||aFormStats?.goalsAgainstAvg||0;
+    const hGF=hs?.goalsForAvgHome||hFormStats?.goalsForAvgHome||hFormStats?.goalsForAvg||0;
+    const hGA=hs?.goalsAgainstAvgHome||hFormStats?.goalsAgainstAvgHome||hFormStats?.goalsAgainstAvg||0;
+    const aGF=as_?.goalsForAvgAway||aFormStats?.goalsForAvgAway||aFormStats?.goalsForAvg||0;
+    const aGA=as_?.goalsAgainstAvgAway||aFormStats?.goalsAgainstAvgAway||aFormStats?.goalsAgainstAvg||0;
     const hCS=hs?.cleanSheetsHome||Math.round((hFormStats?.cleanSheetRate||0)*5)||0;
     if(isHome){
       if(hGF>0)lines.push(`${pick.home} marca ${hGF.toFixed(1)} golos/jogo em casa`);
@@ -4617,6 +4635,12 @@ function renderCard(pick,index,hf,af){
       ⚠️ Dados históricos insuficientes — análise menos fiável
     </div>`:'';
 
+  // Low-confidence badge (sample < 3 jogos analisados em uma das equipas)
+  const lowConfBadgeHoje=pick.group==='soccer'&&pickIsLowConfidence(pick)?`
+    <div style="display:inline-flex;align-items:center;gap:4px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;padding:2px 8px;font-size:9px;color:#f59e0b;margin:3px 0;">
+      ⚠️ Baixa confiança — equipa com poucos jogos no histórico
+    </div>`:'';
+
   // Advanced stats row (remates, posse)
   const hAdv=advancedStatsCache[`adv_${pick.home}`];
   const aAdv=advancedStatsCache[`adv_${pick.away}`];
@@ -4746,7 +4770,7 @@ function renderCard(pick,index,hf,af){
           <div class="form-dots">${renderForm(af,true)}</div>
         </div>
       </div>
-      ${noDataBadge}${cornersRow}${advRow}${standingsRow}${xgRow}${h2hRow}${refRow}
+      ${noDataBadge}${lowConfBadgeHoje}${cornersRow}${advRow}${standingsRow}${xgRow}${h2hRow}${refRow}
       <div class="odds-row">
         <div class="bet-tag ${marketClass(pick.marketType)}">${pick.bet}</div>
         <div class="odd-pill ${oddClass(pick.odd)}">${pick.isFriendly?'Sem odds':pick.noOdds?'📋 Sem odds':pick.isEstimated?`~${pick.odd.toFixed(2)} est.`:('@'+pick.odd.toFixed(2)+(pick.isCombo?' ~':''))}</div>
@@ -5003,18 +5027,23 @@ function generateMultiples(){
     ['3','4','5'].forEach(n=>document.getElementById(`multiples-list-${n}`).innerHTML='<div class="empty-state"><div class="ei">🎰</div><p>Carrega primeiro os picks do dia.</p></div>');
     return;
   }
-  const today=new Date().toDateString();
-  const tom=new Date();tom.setDate(tom.getDate()+1);const tomStr=tom.toDateString();
   const now=Date.now();
 
-  // Base pool — today only, só picks com dados completos
-  const pool=allGames.filter(p=>{
-    const d=new Date(p.commence);
-    if(d.toDateString()!==today)return false;
-    if(d.getTime()<now)return false;
+  // Base pool — betting day (hoje + jogos de madrugada de amanhã)
+  // Para múltiplas exigimos pelo menos dados parciais (form), mas aceitamos sem stats completas.
+  // Picks com baixa confiança (sample <3 jogos) são sempre excluídos — risco demasiado alto em múltiplas.
+  const poolRaw=[...allGames,...tomorrowGames];
+  const dedupMul=new Map();
+  poolRaw.forEach(p=>{const k=`${p.home}|${p.away}|${p.bet}`;if(!dedupMul.has(k))dedupMul.set(k,p);});
+  const pool=[...dedupMul.values()].filter(p=>{
+    if(!inBettingDay(p.commence,0))return false;
+    if(new Date(p.commence).getTime()<now)return false;
     if(p.isFriendly)return false;
     if(p.noOdds)return false;
-    if(p.group==='soccer'&&!hasFullData(p))return false;
+    if(p.group==='soccer'){
+      if(!hasPartialData(p))return false;        // exige pelo menos form
+      if(pickIsLowConfidence(p))return false;    // exclui picks de equipas com <3 jogos
+    }
     return true;
   });
 
@@ -5662,6 +5691,9 @@ async function loadWorkerAnalysis(){
         cleanSheets: d.cleanSheets||0,
         bttsCount: d.bttsCount||0,
         n: d.gamesAnalyzed||0,
+        gamesHome: d.gamesHome||0,
+        gamesAway: d.gamesAway||0,
+        lowConfidence: d.lowConfidence===true,
       };
       formCount++;
     });
@@ -6477,6 +6509,8 @@ function renderTop15(){
     const t=new Date(p.commence).getTime();
     if(t<now-3*60*60*1000)return false;
     if(p.odd<1.50)return false;
+    // Excluir picks com baixa confiança (equipas com <3 jogos analisados)
+    if(p.group==='soccer'&&pickIsLowConfidence(p))return false;
     return true;
   }).sort((a,b)=>composite(b)-composite(a));
 
@@ -6531,6 +6565,7 @@ function renderTop15(){
   list.innerHTML=progressBar+f.map((pick,i)=>{
     const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--muted);">${i+1}</span>`;
     const partialBadge=pick._partial?`<span style="font-size:9px;padding:2px 6px;background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.25);color:var(--red);border-radius:4px;margin-left:6px;">⚠️ dados parciais</span>`:'';
+    const lowConfBadge=pickIsLowConfidence(pick)?`<span style="font-size:9px;padding:2px 6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;border-radius:4px;margin-left:6px;">⚠️ Baixa confiança</span>`:'';
     const evClass=pick.ev>0?'value-pos':'value-neg';
     const evStr=pick.ev>0?`+${pick.ev}%`:`${pick.ev}%`;
     const added=loadHistory().some(h=>h.match===`${pick.home} vs ${pick.away}`&&h.bet===pick.bet);
@@ -6579,7 +6614,7 @@ function renderTop15(){
         <span class="bet-tag ${marketClass(pick.marketType)}" style="font-size:10px;">${pick.bet}</span>
         <span class="value-badge ${evClass}" style="font-size:10px;padding:2px 7px;">${evStr}</span>
         <span style="font-size:10px;font-family:'DM Mono',monospace;color:${confColor(pick.confidence)};">⭐${pick.confidence}/10</span>
-        ${partialBadge}
+        ${partialBadge}${lowConfBadge}
         <span style="font-size:10px;color:var(--muted);margin-left:auto;">${pick.league}</span>
       </div>
       <!-- Linha 3: análise -->
@@ -6599,18 +6634,19 @@ function renderTop15(){
 
 function renderMarketTop10(){
   const now=Date.now();
-  const todayStr=new Date().toDateString();
-  const tom=new Date();tom.setDate(tom.getDate()+1);
-  const tomStr=tom.toDateString();
-
-  const pool=allGames.filter(p=>{
-    const d=new Date(p.commence);
-    if(d.toDateString()!==todayStr)return false;
-    if(d.getTime()<now-3*60*60*1000)return false;
+  // Pool igual ao Top 15: jogos de hoje + jogos de madrugada de amanhã que caem no betting day
+  const poolRaw=[...allGames,...tomorrowGames];
+  // Dedup (jogos de madrugada podem aparecer em ambos)
+  const dedup=new Map();
+  poolRaw.forEach(p=>{const k=`${p.home}|${p.away}|${p.bet}`;if(!dedup.has(k))dedup.set(k,p);});
+  const pool=[...dedup.values()].filter(p=>{
+    if(!inBettingDay(p.commence,0))return false; // dentro do betting day (06:00→06:00 Lisboa)
+    if(new Date(p.commence).getTime()<now-3*60*60*1000)return false;
     if(p.noOdds||p.isFriendly)return false;
-    if(p.group==='soccer'&&!hasFullData(p))return false; // só picks com dados completos
     if(p.marketType==='dc'){if(p.odd<1.30)return false;}
     else if(p.odd<1.50)return false;
+    // Excluir picks com baixa confiança (equipa com <3 jogos analisados)
+    if(p.group==='soccer'&&pickIsLowConfidence(p))return false;
     return true;
   });
 
@@ -6776,17 +6812,20 @@ function saveAffiliates(){
 
 function exportPublicPicks(){
   const affs=JSON.parse(localStorage.getItem('br_affiliates')||'{}');
-  const todayStr=new Date().toDateString();
   const now=Date.now();
-  // Get top picks for the day
-  const top=allGames
+  // Pool: betting day (hoje + jogos de madrugada de amanhã), igual ao Top 15
+  const poolRaw=[...allGames,...tomorrowGames];
+  const dedupExp=new Map();
+  poolRaw.forEach(p=>{const k=`${p.home}|${p.away}|${p.bet}`;if(!dedupExp.has(k))dedupExp.set(k,p);});
+  const top=[...dedupExp.values()]
     .filter(p=>{
       if(!p.commence)return false;
-      const d=new Date(p.commence);
-      if(d.toDateString()!==todayStr)return false;
+      if(!inBettingDay(p.commence,0))return false;
       if(p.isFriendly||p.noOdds)return false;
-      if(d.getTime()<now-3*60*60*1000)return false;
+      if(new Date(p.commence).getTime()<now-3*60*60*1000)return false;
       if(p.odd<1.50)return false;
+      // Excluir picks com baixa confiança (sample <3 jogos) — não exportar para a página pública
+      if(p.group==='soccer'&&pickIsLowConfidence(p))return false;
       return true;
     })
     .sort((a,b)=>composite(b)-composite(a));
