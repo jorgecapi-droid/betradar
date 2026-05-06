@@ -5790,7 +5790,7 @@ async function loadGames(forceRefresh=false){
       updateMarketCounts();renderFavLeagues();renderFavPicksBar();
       trackOddsHistory(allGames);
       setTimeout(()=>checkInstantNotifications(allGames),1000);
-      renderFiltered();renderTop15();return;
+      renderFiltered();renderTop15();renderMarketTop10();generateMultiples();return;
     }
   }
 
@@ -5980,6 +5980,8 @@ async function loadGames(forceRefresh=false){
 
   renderFiltered();
   renderTop15();
+  renderMarketTop10();
+  generateMultiples();
   updateClosingOdds();
   // O Worker já fez todo o prefetch pesado no cron. Só precisamos de prefetch local
   // se: (a) o user clicou Atualizar OU (b) o Worker não tem análise pronta E o cache local também não.
@@ -6001,7 +6003,7 @@ async function loadGames(forceRefresh=false){
   // (Libertadores, Brasileirão noite, MLS, Argentina, etc.) aparecerem nos tops de hoje.
   // O filtro betting-day (06:00→06:00 Lisboa) em renderTop15/renderWidget separa os que
   // pertencem ao dia de hoje vs. os do dia seguinte.
-  setTimeout(()=>loadTomorrowGames().then(()=>{renderTop15();renderWidget&&renderWidget();}),5000);
+  setTimeout(()=>loadTomorrowGames().then(()=>{renderTop15();renderMarketTop10();generateMultiples();renderWidget&&renderWidget();}),5000);
 }
 
 async function prefetchAllGames(picks){
