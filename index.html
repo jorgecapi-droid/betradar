@@ -5869,6 +5869,32 @@ async function loadGames(forceRefresh=false){
       await new Promise(r=>setTimeout(r,150));
     }
 
+    // FALLBACK: jogos sem odds da call directa → tentar harvest do Worker (KV).
+    // O Worker faz fetches mais robustos e cacheados, por isso tipicamente tem odds
+    // que a API-Football devolve vazia em chamadas pontuais (ligas africanas,
+    // sul-americanas, etc.). 1 só call extra ao Worker, e só quando necessário.
+    const missingOddsIds=Object.keys(fixtureMap).map(Number).filter(id=>!oddsMap[id]||oddsMap[id].length===0);
+    if(missingOddsIds.length>0){
+      try{
+        const wr=await fetch(`${WORKER_URL}/data`);
+        if(wr.ok){
+          const wd=await wr.json();
+          const workerOdds=wd?.odds||[];
+          let recovered=0;
+          const missingSet=new Set(missingOddsIds);
+          workerOdds.forEach(item=>{
+            const fid=item.fixture?.id;
+            if(fid&&missingSet.has(fid)&&item.bookmakers?.length){
+              oddsMap[fid]=item.bookmakers;
+              recovered++;
+            }
+          });
+          if(recovered>0)console.log(`[Worker fallback] Recuperadas odds para ${recovered}/${missingOddsIds.length} jogos sem cobertura directa.`);
+          else console.log(`[Worker fallback] ${missingOddsIds.length} jogos sem odds — Worker também não tem.`);
+        }
+      }catch(e){console.warn('[Worker fallback] Falhou:',e.message);}
+    }
+
     // Construir picks por sport (liga)
     for(const sport of SPORTS){
       if(!sport.lid)continue;
