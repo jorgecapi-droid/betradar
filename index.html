@@ -3070,13 +3070,21 @@ function widgetAdd(wid,home,away,bet,odd,league,time,date,source='top15',topRank
     marketType:pick?.marketType||'h2h',group:pick?.group||'soccer',
     fixtureId,leagueId:pick?.leagueId||null,home,away,source,topRank,
     confidence:pick?.confidence||null});
-  // Update button immediately without re-render
-  const card=document.getElementById(`card-${wid}`)||document.querySelector(`[data-wid="${wid}"]`);
-  if(card){
-    card.classList.add('added');
-    const btn=card.querySelector('.widget-add-btn');
-    if(btn){btn.textContent='✅ Adicionada';btn.disabled=true;btn.style.opacity='0.6';}
-    const icon=card.querySelector('.widget-add');
+  // Update button/row immediately without re-render.
+  // Há dois layouts: (a) Top 15 / Market Top 10 — botão com .widget-add-btn[data-wid];
+  // (b) Widget compacto — div.widget-row com id="${wid}" e ícone .widget-add.
+  const btn=document.querySelector(`.widget-add-btn[data-wid="${wid}"]`);
+  if(btn){
+    btn.textContent='✅ Adicionada';
+    btn.disabled=true;
+    btn.style.opacity='0.6';
+    const card=btn.closest('.top10-card');
+    if(card)card.classList.add('added');
+  }
+  const row=document.getElementById(wid);
+  if(row){
+    row.classList.add('added');
+    const icon=row.querySelector('.widget-add');
     if(icon){icon.textContent='✅';icon.style.pointerEvents='none';}
   }
   showToast(`✅ ${home} vs ${away} adicionada!`);
