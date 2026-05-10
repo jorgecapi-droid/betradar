@@ -6707,24 +6707,26 @@ function renderMarketTop10(){
 
   pool.sort((a,b)=>composite(b)-composite(a));
 
-  // DC+ Over vs Under: um jogo só aparece no que tiver melhor composite
-  // DC+ BTTS vs Não BTTS: idem
-  const overUnderWinner=new Map();
-  const bttsWinner=new Map();
+  // Combos: um jogo so aparece uma vez em DC+ e uma vez em 1/2+.
+  const comboWinner=new Map();
+  const halfWinner=new Map();
+  const comboBucket=p=>{
+    const bet=p.bet||'';
+    if(p.marketType!=='combo')return null;
+    const isHalf=bet.startsWith('1/2');
+    if(bet.includes('Over'))return isHalf?{family:'half',type:'halfover'}:{family:'dc',type:'over'};
+    if(bet.includes('Under')&&!bet.includes('Menos'))return isHalf?{family:'half',type:'halfunder'}:{family:'dc',type:'under'};
+    if(!isHalf&&bet.includes('Ambas Marcam')&&!bet.includes('N'))return{family:'dc',type:'btts'};
+    if(!isHalf&&bet.includes('Ambas Marcam')&&bet.includes('N'))return{family:'dc',type:'bttsno'};
+    return null;
+  };
   pool.filter(p=>p.marketType==='combo').forEach(p=>{
     const k=`${p.home}|${p.away}`;
-    const isOver=p.bet.includes('Over');
-    const isUnder=p.bet.includes('Under')&&!p.bet.includes('Menos');
-    const isBTTS=(p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não'))||(p.bet.includes('BTTS')&&!p.bet.includes('Não'));
-    const isBTTSNo=p.bet.includes('Não Ambas');
-    if(isOver||isUnder){
-      const cur=overUnderWinner.get(k);
-      if(!cur||composite(p)>composite(cur.pick)) overUnderWinner.set(k,{type:isOver?'over':'under',pick:p});
-    }
-    if(isBTTS||isBTTSNo){
-      const cur=bttsWinner.get(k);
-      if(!cur||composite(p)>composite(cur.pick)) bttsWinner.set(k,{type:isBTTS?'btts':'bttsno',pick:p});
-    }
+    const bucket=comboBucket(p);
+    if(!bucket)return;
+    const target=bucket.family==='half'?halfWinner:comboWinner;
+    const cur=target.get(k);
+    if(!cur||composite(p)>composite(cur.pick))target.set(k,{...bucket,pick:p});
   });
 
   const markets=[
@@ -6732,17 +6734,17 @@ function renderMarketTop10(){
     {id:'top-totals-list',type:'totals',  source:'top10_totals',label:'O/U'},
     {id:'top-btts-list',  type:'btts',    source:'top10_btts',  label:'BTTS'},
     {id:'top-combo-over-list', type:'combo', source:'top10_combo_over', label:'DC+ Over',
-      subFilter:p=>(p.bet.includes('Over')&&!p.bet.startsWith('1/2')||p.bet.startsWith('1/2')&&p.bet.includes('Over'))&&overUnderWinner.get(`${p.home}|${p.away}`)?.type==='over'},
+      subFilter:p=>comboWinner.get(`${p.home}|${p.away}`)?.pick===p&&comboWinner.get(`${p.home}|${p.away}`)?.type==='over'},
     {id:'top-combo-under-list', type:'combo', source:'top10_combo_under', label:'DC+ Under',
-      subFilter:p=>(p.bet.includes('Under')&&!p.bet.includes('Menos'))&&overUnderWinner.get(`${p.home}|${p.away}`)?.type==='under'},
+      subFilter:p=>comboWinner.get(`${p.home}|${p.away}`)?.pick===p&&comboWinner.get(`${p.home}|${p.away}`)?.type==='under'},
     {id:'top-combo-btts-list', type:'combo', source:'top10_combo_btts', label:'DC+ BTTS',
-      subFilter:p=>(p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não'))||( p.bet.startsWith('1/2')&&p.bet.includes('BTTS'))&&bttsWinner.get(`${p.home}|${p.away}`)?.type==='btts'},
+      subFilter:p=>comboWinner.get(`${p.home}|${p.away}`)?.pick===p&&comboWinner.get(`${p.home}|${p.away}`)?.type==='btts'},
     {id:'top-combo-bttsno-list', type:'combo', source:'top10_combo_bttsno', label:'DC+ Não BTTS',
-      subFilter:p=>p.bet.includes('Não Ambas')&&bttsWinner.get(`${p.home}|${p.away}`)?.type==='bttsno'},
+      subFilter:p=>comboWinner.get(`${p.home}|${p.away}`)?.pick===p&&comboWinner.get(`${p.home}|${p.away}`)?.type==='bttsno'},
     {id:'top-combo-halfover-list', type:'combo', source:'top10_combo_halfover', label:'1/2 + Over',
-      subFilter:p=>p.bet.startsWith('1/2')&&p.bet.includes('Over')},
+      subFilter:p=>halfWinner.get(`${p.home}|${p.away}`)?.pick===p&&halfWinner.get(`${p.home}|${p.away}`)?.type==='halfover'},
     {id:'top-combo-halfunder-list', type:'combo', source:'top10_combo_halfunder', label:'1/2 + Under',
-      subFilter:p=>p.bet.startsWith('1/2')&&p.bet.includes('Under')},
+      subFilter:p=>halfWinner.get(`${p.home}|${p.away}`)?.pick===p&&halfWinner.get(`${p.home}|${p.away}`)?.type==='halfunder'},
     {id:'top-corners-list',type:'corners',source:'top10_corners',label:'Cantos'},
     {id:'top-ht-list',     type:'ht',     source:'top10_ht',     label:'Intervalo'},
   ];
@@ -6894,25 +6896,21 @@ function exportPublicPicks(){
       if(byMarket[mt].length>=10)break;
     }
   });
-  // DC+ sub-markets — no game repeats across them
-  const comboFilters={
-    combo_over:p=>p.marketType==='combo'&&p.bet.includes('Over'),
-    combo_under:p=>p.marketType==='combo'&&p.bet.includes('Under'),
-    combo_btts:p=>p.marketType==='combo'&&p.bet.includes('Ambas Marcam')&&!p.bet.includes('Não'),
-    combo_bttsno:p=>p.marketType==='combo'&&p.bet.includes('Não Ambas'),
-  };
-  const comboUsed=new Set();
-  Object.entries(comboFilters).forEach(([key,filter])=>{
-    const seenM=new Set();
-    byMarket[key]=[];
-    for(const p of top.filter(filter)){
-      const k=`${p.home}|${p.away}`;
-      if(seenM.has(k)||comboUsed.has(k))continue;
-      seenM.add(k);comboUsed.add(k);
-      byMarket[key].push(p);
-      if(byMarket[key].length>=10)break;
-    }
+  // DC+ export: escolher so a melhor combo por jogo, sem conflitos entre tabs.
+  const comboExportWinner=new Map();
+  top.filter(p=>p.marketType==='combo'&&!p.bet.startsWith('1/2')).forEach(p=>{
+    const bucket=comboBucket(p);
+    if(!bucket||bucket.family!=='dc')return;
+    const k=`${p.home}|${p.away}`;
+    const cur=comboExportWinner.get(k);
+    if(!cur||composite(p)>composite(cur.pick))comboExportWinner.set(k,{...bucket,pick:p});
   });
+  ['combo_over','combo_under','combo_btts','combo_bttsno'].forEach(k=>byMarket[k]=[]);
+  const comboKeyByType={over:'combo_over',under:'combo_under',btts:'combo_btts',bttsno:'combo_bttsno'};
+  for(const item of comboExportWinner.values()){
+    const key=comboKeyByType[item.type];
+    if(key&&byMarket[key].length<10)byMarket[key].push(item.pick);
+  }
   // Generate automatic explanation text for each pick
   function generateReason(p){
     const parts=[];
