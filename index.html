@@ -259,6 +259,11 @@
   .match-block{display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:8px;margin-bottom:10px;}
   .team-side{display:flex;flex-direction:column;gap:4px;min-width:0;}
   .team-side.right{align-items:flex-end;text-align:right;}
+  .team-line{display:flex;align-items:center;gap:7px;min-width:0;}
+  .team-side.right .team-line{flex-direction:row-reverse;}
+  .team-logo{width:22px;height:22px;object-fit:contain;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.04);padding:2px;border:1px solid var(--border);}
+  .team-logo.hidden{display:none;}
+  .league-logo{width:13px;height:13px;object-fit:contain;border-radius:3px;vertical-align:-2px;margin-right:5px;}
   .team-name{font-size:13px;font-weight:700;color:var(--text);line-height:1.25;word-break:break-word;}
   .form-dots{display:flex;gap:3px;}
   .team-side.right .form-dots{justify-content:flex-end;}
@@ -4576,6 +4581,15 @@ function kellyStake(pick,bankroll=100){
   return Math.round(stake*2)/2; // round to 0.5
 }
 
+function safeImgUrl(url){
+  return typeof url === 'string' && /^https?:///i.test(url) ? url : '';
+}
+function imgTag(url, cls, alt=''){
+  const src=safeImgUrl(url);
+  if(!src)return '';
+  return `<img class="${cls}" src="${src}" alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.classList.add('hidden');this.removeAttribute('src')">`;
+}
+
 function renderCard(pick,index,hf,af){
   if(!pick||!pick.home||!pick.away)return '';
   if(!pick.noOdds&&(!pick.odd||pick.odd<1.01))return '';
@@ -4770,16 +4784,16 @@ function renderCard(pick,index,hf,af){
           ${pick.date&&pick.date!=='undefined'?`<div class="match-date-badge">${pick.display||pick.date}</div>`:''}
         </div>
       </div>
-      <div class="league">${pick.league}</div>
+      <div class="league">${lLogo}${pick.league}</div>
       ${warningRow}
       <div class="match-block">
         <div class="team-side">
-          <div class="team-name">${dH}</div>
+          <div class="team-line">${hLogo}<div class="team-name">${dH}</div></div>
           <div class="form-dots">${renderForm(hf)}</div>
         </div>
         <div class="vs-center"><div class="vs-badge">VS</div><div class="form-label-c">FORMA</div></div>
         <div class="team-side right">
-          <div class="team-name">${dA}</div>
+          <div class="team-line">${aLogo}<div class="team-name">${dA}</div></div>
           <div class="form-dots">${renderForm(af,true)}</div>
         </div>
       </div>
