@@ -4582,7 +4582,7 @@ function kellyStake(pick,bankroll=100){
 }
 
 function safeImgUrl(url){
-  return typeof url === 'string' && /^https?:///i.test(url) ? url : '';
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : '';
 }
 function imgTag(url, cls, alt=''){
   const src=safeImgUrl(url);
@@ -4630,6 +4630,9 @@ function renderCard(pick,index,hf,af){
   const maxL=20;
   const dH=pick.home.length>maxL?pick.home.slice(0,maxL-1)+'…':pick.home;
   const dA=pick.away.length>maxL?pick.away.slice(0,maxL-1)+'…':pick.away;
+  const hLogo=imgTag(pick.homeLogo,'team-logo',pick.home);
+  const aLogo=imgTag(pick.awayLogo,'team-logo',pick.away);
+  const lLogo=imgTag(pick.leagueLogo,'league-logo',pick.league);
   const confBarWidth=Math.round(conf*10);
   const confDots=Array.from({length:10},(_,i)=>`<div style="width:5px;height:5px;border-radius:50%;flex-shrink:0;background:${i<conf?confColor(conf):'var(--border)'}"></div>`).join('');
 
@@ -6367,6 +6370,35 @@ function renderMarketAcerto(bets){
 function setSort(type,btn){currentSort=type;document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderFiltered();}
 function setOddsRange(range,btn){currentRange=range;document.querySelectorAll('.odds-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderFiltered();}
 function setSport(type,btn){currentSport=type;document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderFiltered();}
+function htmlSafe(v){
+  return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function renderCardFallback(pick,index){
+  if(!pick)return '';
+  const odd=Number(pick.odd||0);
+  const oddTxt=odd>0?'@'+odd.toFixed(2):'';
+  return '<div class="game-card low" data-group="'+htmlSafe(pick.group||'soccer')+'" style="animation-delay:'+Math.min(index*0.035,0.7).toFixed(2)+'s">' +
+    '<div class="card-main">' +
+      '<div class="card-top-row">' +
+        '<div class="rank-badge">'+String(index+1).padStart(2,'0')+'</div>' +
+        '<div class="sport-badge">'+htmlSafe(pick.icon||'')+' '+htmlSafe((pick.group||'soccer').slice(0,4).toUpperCase())+'</div>' +
+        '<div class="card-time-group"><div class="match-time">'+htmlSafe(pick.time||'')+'</div></div>' +
+      '</div>' +
+      '<div class="league">'+htmlSafe(pick.league||'')+'</div>' +
+      '<div class="match-block">' +
+        '<div class="team-side"><div class="team-name">'+htmlSafe(pick.home||'?')+'</div></div>' +
+        '<div class="vs-center"><div class="vs-badge">VS</div></div>' +
+        '<div class="team-side right"><div class="team-name">'+htmlSafe(pick.away||'?')+'</div></div>' +
+      '</div>' +
+      '<div class="odds-row">' +
+        '<div class="bet-tag">'+htmlSafe(pick.bet||'')+'</div>' +
+        '<div class="odd-pill">'+htmlSafe(oddTxt)+'</div>' +
+        '<div class="value-badge value-neg">cartao simplificado</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 async function renderFiltered(){
   const list=document.getElementById('game-list');
   const nowMs=Date.now();
@@ -6448,7 +6480,7 @@ async function renderFiltered(){
   const secLabel=(txt,count)=>`<div class="section-day-header"><span class="section-day-label">${txt}</span><span class="section-day-count">${count} picks</span></div>`;
   const renderGroup=(picks,offset)=>picks.map((pick,i)=>{
     try{return renderCard(pick,i+offset,getForm(pick,true),getForm(pick,false));}
-    catch(e){console.error('renderCard error:',pick?.home,'vs',pick?.away,e.message);return'';}
+    catch(e){console.error('renderCard error:',pick?.home,'vs',pick?.away,e.message);return renderCardFallback(pick,i+offset);}
   }).join('');
   list.innerHTML=
     (todayPicks.length>0?secLabel('📅 Hoje',todayPicks.length)+renderGroup(todayPicks,0):'')+
