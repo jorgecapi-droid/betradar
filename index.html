@@ -1424,7 +1424,7 @@ function updateBankrollDisplay(){
 }
 
 // ── CACHE ─────────────────────────────────────────────────────────
-const CACHE_KEY='betradar_cache_v31';
+const CACHE_KEY='betradar_cache_v32';
 const BBALL_CACHE_KEY='betradar_bball_v5';
 
 function loadBballCache(){
@@ -3553,7 +3553,7 @@ function genSite(pick,hf,af){
 function extractPicks(game,sport){
   const picks=[],home=game.home_team,away=game.away_team;
   const dt=fmtDateTime(game.commence_time);
-  const base={home,away,league:sport.label,group:sport.group,icon:sport.icon,time:dt.time,date:dt.date,display:dt.display,leagueId:sport.lid,commence:game.commence_time};
+  const base={home,away,league:sport.label,group:sport.group,icon:sport.icon,time:dt.time,date:dt.date,display:dt.display,leagueId:sport.lid,commence:game.commence_time,homeLogo:game.homeLogo||'',awayLogo:game.awayLogo||'',leagueLogo:game.leagueLogo||sport.logo||''};
 
   // Extract Pinnacle odds as sharp reference
   const pinBk=game.bookmakers?.find(b=>b.key==='pinnacle');
@@ -3898,7 +3898,7 @@ async function fetchOdds(sport,retry=0){
       const homeName=f.teams?.home?.name;
       const awayName=f.teams?.away?.name;
       if(id){
-        fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date,status:f.fixture?.status?.short,homeId,awayId};
+        fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date,status:f.fixture?.status?.short,homeId,awayId,homeLogo:f.teams?.home?.logo||'',awayLogo:f.teams?.away?.logo||'',leagueLogo:f.league?.logo||''};
         if(homeName&&homeId){formCache[homeName+'_tid']=homeId;if(!formCache[homeName])formCache[homeName]=[];}
         if(awayName&&awayId){formCache[awayName+'_tid']=awayId;if(!formCache[awayName])formCache[awayName]=[];}
         if(homeName&&awayName)upcomingFixtureCache[`${homeName}|${awayName}`]=id;
@@ -3916,7 +3916,7 @@ async function fetchOdds(sport,retry=0){
 
     const games=Object.entries(fixtureMap).map(([id,fix])=>{
       if(!fix.home||!fix.away)return null;
-      return{id:`af_${id}`,home_team:fix.home,away_team:fix.away,commence_time:fix.date,bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],fix.home,fix.away):[]};
+      return{id:`af_${id}`,home_team:fix.home,away_team:fix.away,commence_time:fix.date,homeLogo:fix.homeLogo||'',awayLogo:fix.awayLogo||'',leagueLogo:fix.leagueLogo||'',bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],fix.home,fix.away):[]};
     }).filter(Boolean);
 
     return{games,ok:games.length>0,status:200};
@@ -3959,7 +3959,7 @@ async function loadTomorrowGames(){
         const homeName=f.teams?.home?.name;
         const awayName=f.teams?.away?.name;
         if(id&&homeName&&awayName){
-          fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date};
+          fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date,homeLogo:f.teams?.home?.logo||'',awayLogo:f.teams?.away?.logo||'',leagueLogo:f.league?.logo||''};
           if(f.teams?.home?.id){formCache[homeName+'_tid']=f.teams.home.id;if(!formCache[homeName])formCache[homeName]=[];}
           if(f.teams?.away?.id){formCache[awayName+'_tid']=f.teams.away.id;if(!formCache[awayName])formCache[awayName]=[];}
           upcomingFixtureCache[`${homeName}|${awayName}`]=id;
@@ -3976,6 +3976,7 @@ async function loadTomorrowGames(){
 
       const games=Object.entries(fixtureMap).map(([id,fix])=>({
         id:`af_${id}`,home_team:fix.home,away_team:fix.away,commence_time:fix.date,
+        homeLogo:fix.homeLogo||'',awayLogo:fix.awayLogo||'',leagueLogo:fix.leagueLogo||'',
         bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],fix.home,fix.away):[]
       }));
 
@@ -4633,6 +4634,8 @@ function renderCard(pick,index,hf,af){
   const hLogo=imgTag(pick.homeLogo,'team-logo',pick.home);
   const aLogo=imgTag(pick.awayLogo,'team-logo',pick.away);
   const lLogo=imgTag(pick.leagueLogo,'league-logo',pick.league);
+  const hTableRec=hSt?(hSt.home?.played?hSt.home:{played:hSt.played||0,w:hSt.w||0,d:hSt.d||0,l:hSt.l||0}):null;
+  const aTableRec=aSt?(aSt.away?.played?aSt.away:{played:aSt.played||0,w:aSt.w||0,d:aSt.d||0,l:aSt.l||0}):null;
   const confBarWidth=Math.round(conf*10);
   const confDots=Array.from({length:10},(_,i)=>`<div style="width:5px;height:5px;border-radius:50%;flex-shrink:0;background:${i<conf?confColor(conf):'var(--border)'}"></div>`).join('');
 
@@ -4689,10 +4692,10 @@ function renderCard(pick,index,hf,af){
     <div style="display:flex;gap:5px;align-items:center;margin:5px 0;flex-wrap:wrap;">
       <span style="font-size:9px;color:var(--muted);text-transform:uppercase;">Tabela:</span>
       <span style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;">
-        ${dH} <strong style="color:${hSt.pos<=5?'var(--accent)':hSt.pos>=15?'var(--red)':'var(--text)'};">${hSt.pos}º</strong> · 🏠 ${hSt.home?.w||0}V ${hSt.home?.d||0}E ${hSt.home?.l||0}D
+        ${dH} <strong style="color:${hSt.pos<=5?'var(--accent)':hSt.pos>=15?'var(--red)':'var(--text)'};">${hSt.pos}º</strong> · 🏠 ${hTableRec?.w||0}V ${hTableRec?.d||0}E ${hTableRec?.l||0}D
       </span>
       <span style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;">
-        ${dA} <strong style="color:${aSt.pos<=5?'var(--accent)':aSt.pos>=15?'var(--red)':'var(--text)'};">${aSt.pos}º</strong> · ✈️ ${aSt.away?.w||0}V ${aSt.away?.d||0}E ${aSt.away?.l||0}D
+        ${dA} <strong style="color:${aSt.pos<=5?'var(--accent)':aSt.pos>=15?'var(--red)':'var(--text)'};">${aSt.pos}º</strong> · ✈️ ${aTableRec?.w||0}V ${aTableRec?.d||0}E ${aTableRec?.l||0}D
       </span>
     </div>`:'';
 
@@ -4902,6 +4905,8 @@ async function runDeepAnalysis(index){
   const pred=fid?predCache[fid]:null;
   const hSt=standingsCache[pick.leagueId]?.[getTid(pick.home)]||null;
   const aSt=standingsCache[pick.leagueId]?.[getTid(pick.away)]||null;
+  const hDaTableRec=hSt?(hSt.home?.played?hSt.home:{played:hSt.played||0,w:hSt.w||0,d:hSt.d||0,l:hSt.l||0}):null;
+  const aDaTableRec=aSt?(aSt.away?.played?aSt.away:{played:aSt.played||0,w:aSt.w||0,d:aSt.d||0,l:aSt.l||0}):null;
   const injuries=fid?(injuryCache[fid]||[]):[];
   const lineup=fid?lineupCache[fid]:null;
   const xg=calcXG(hStats,aStats,true,pick.home,pick.away);
@@ -4928,8 +4933,8 @@ async function runDeepAnalysis(index){
     `=== DADOS ESTATÍSTICOS ===`,
     `Forma (últimos 5): ${pick.home}: ${hf.length?hf.join(' '):'N/D'} | ${pick.away}: ${af.length?af.join(' '):'N/D'}`,
     xg?`xG estimado: ${pick.home} ${xg.home} — ${pick.away} ${xg.away} (total ${xg.total})`:'',
-    hSt?`Classificação ${pick.home}: ${hSt.pos}º | Casa: ${hSt.home?.w||0}V ${hSt.home?.d||0}E ${hSt.home?.l||0}D`:'',
-    aSt?`Classificação ${pick.away}: ${aSt.pos}º | Fora: ${aSt.away?.w||0}V ${aSt.away?.d||0}E ${aSt.away?.l||0}D`:'',
+    hSt?`Classificação ${pick.home}: ${hSt.pos}º | Casa: ${hDaTableRec?.w||0}V ${hDaTableRec?.d||0}E ${hDaTableRec?.l||0}D`:'',
+    aSt?`Classificação ${pick.away}: ${aSt.pos}º | Fora: ${aDaTableRec?.w||0}V ${aDaTableRec?.d||0}E ${aDaTableRec?.l||0}D`:'',
     hAdv?`${pick.home} stats: ${hAdv.shotsOnHomeAvg??hAdv.shotsOnAvg} remates/j | ${hAdv.possessionAvg}% posse | ${hAdv.cornersAvg} cantos/j | ${hAdv.cleanSheetRate?Math.round(hAdv.cleanSheetRate*100)+'% clean sheets':''}`:'' ,
     aAdv?`${pick.away} stats: ${aAdv.shotsOnAwayAvg??aAdv.shotsOnAvg} remates/j | ${aAdv.possessionAvg}% posse | ${aAdv.cornersAvg} cantos/j | ${aAdv.cleanSheetRate?Math.round(aAdv.cleanSheetRate*100)+'% clean sheets':''}`:'' ,
     h2h&&h2h.total>=3?`H2H (${h2h.total} jogos): ${pick.home} ${h2h.team1wins}V ${h2h.draws}E ${h2h.team2wins}D | Média ${h2h.avgGoals} golos | Over2.5: ${Math.round(h2h.over25/h2h.total*100)}% | BTTS: ${Math.round(h2h.btts/h2h.total*100)}%`:'H2H: N/D',
@@ -5867,7 +5872,7 @@ async function loadGames(forceRefresh=false){
       const homeId=f.teams?.home?.id, awayId=f.teams?.away?.id;
       const homeName=f.teams?.home?.name, awayName=f.teams?.away?.name;
       if(!id||!lid||!homeName||!awayName)return;
-      fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date,status:f.fixture?.status?.short,homeId,awayId,lid};
+      fixtureMap[id]={home:homeName,away:awayName,date:f.fixture?.date,status:f.fixture?.status?.short,homeId,awayId,lid,homeLogo:f.teams?.home?.logo||'',awayLogo:f.teams?.away?.logo||'',leagueLogo:f.league?.logo||''};
       if(homeId){formCache[homeName+'_tid']=homeId;if(!formCache[homeName])formCache[homeName]=[];}
       if(awayId){formCache[awayName+'_tid']=awayId;if(!formCache[awayName])formCache[awayName]=[];}
       upcomingFixtureCache[`${homeName}|${awayName}`]=id;
@@ -5928,7 +5933,7 @@ async function loadGames(forceRefresh=false){
       if(!lidFixtures.length)continue;
       const games=lidFixtures.map(id=>{
         const fix=fixtureMap[id];
-        return{id:`af_${id}`,home_team:fix.home,away_team:fix.away,commence_time:fix.date,bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],fix.home,fix.away):[]};
+        return{id:`af_${id}`,home_team:fix.home,away_team:fix.away,commence_time:fix.date,homeLogo:fix.homeLogo||'',awayLogo:fix.awayLogo||'',leagueLogo:fix.leagueLogo||'',bookmakers:oddsMap[id]?normalizeBookmakers(oddsMap[id],fix.home,fix.away):[]};
       });
       for(const g of games)allPicks.push(...extractPicks(g,sport));
     }
