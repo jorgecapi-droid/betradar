@@ -265,13 +265,6 @@
   .team-logo.hidden{display:none;}
   .league-logo{width:13px;height:13px;object-fit:contain;border-radius:3px;vertical-align:-2px;margin-right:5px;}
 .league-flag{font-size:12px;margin-right:5px;vertical-align:-1px;filter:saturate(1.05)}
-.team-facts{display:flex;flex-direction:column;gap:3px;margin-top:3px;max-width:100%;}
-.team-side.right .team-facts{align-items:flex-end;}
-.team-fact{display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:9px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.team-fact strong{color:var(--text);font-weight:700;}
-.match-center-facts{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:5px;}
-.match-fact{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:9px;color:var(--text2);white-space:nowrap;}
-.match-fact strong{color:var(--text);}
   .team-name{font-size:13px;font-weight:700;color:var(--text);line-height:1.25;word-break:break-word;}
   .form-dots{display:flex;gap:3px;}
   .team-side.right .form-dots{justify-content:flex-end;}
@@ -624,17 +617,7 @@
   @media(max-width:640px){
     .opinions{grid-template-columns:1fr;}
     .opinion-col:first-child{border-right:none;border-bottom:1px solid var(--border);}
-    .team-name{font-size:12px;}
-    .match-block{grid-template-columns:1fr;gap:8px;align-items:stretch;}
-    .team-side,.team-side.right{align-items:flex-start;text-align:left;}
-    .team-side.right .team-line{flex-direction:row;}
-    .team-side.right .form-dots{justify-content:flex-start;}
-    .team-side.right .team-facts{align-items:flex-start;}
-    .vs-center{padding:2px 0;}
-    .match-center-facts{width:100%;align-items:stretch;}
-    .team-fact,.match-fact{width:100%;white-space:normal;line-height:1.35;}
-    .team-logo{width:20px;height:20px;}
-    .card-main{padding:12px;}
+    .team-name{font-size:12px;}.match-block{grid-template-columns:1fr 36px 1fr;gap:5px;}
     .prob-bar-wrap{min-width:100%;}.main-tab{font-size:10px;padding:8px 3px;}
     .confidence-badge{right:44px;}
     /* Show bottom nav, hide top tabs on mobile */
@@ -4736,20 +4719,6 @@ function renderCard(pick,index,hf,af){
       </span>
     </div>`:'';
 
-  const hFactItems=[];
-  const aFactItems=[];
-  if(hSt&&hTableRec)hFactItems.push(`<span class="team-fact">Tabela <strong>${hSt.pos}?</strong> ? ${hTableRec.w||0}V ${hTableRec.d||0}E ${hTableRec.l||0}D</span>`);
-  if(aSt&&aTableRec)aFactItems.push(`<span class="team-fact">Tabela <strong>${aSt.pos}?</strong> ? ${aTableRec.w||0}V ${aTableRec.d||0}E ${aTableRec.l||0}D</span>`);
-  if(hAdv)hFactItems.push(`<span class="team-fact">Stats <strong>${hAdv.shotsOnHomeAvg??hAdv.shotsOnAvg}</strong> rem/j ? ${hAdv.possessionAvg}% posse</span>`);
-  if(aAdv)aFactItems.push(`<span class="team-fact">Stats <strong>${aAdv.shotsOnAwayAvg??aAdv.shotsOnAvg}</strong> rem/j ? ${aAdv.possessionAvg}% posse</span>`);
-  if(hCornVal!=null)hFactItems.push(`<span class="team-fact">Cantos <strong>${hCornVal.toFixed(1)}</strong>/jogo</span>`);
-  if(aCornVal!=null)aFactItems.push(`<span class="team-fact">Cantos <strong>${aCornVal.toFixed(1)}</strong>/jogo</span>`);
-  const hTeamFacts=hFactItems.length?`<div class="team-facts">${hFactItems.join('')}</div>`:'';
-  const aTeamFacts=aFactItems.length?`<div class="team-facts">${aFactItems.join('')}</div>`:'';
-  const matchFacts=[];
-  if(xg)matchFacts.push(`<span class="match-fact">xG <strong>${xg.home}</strong>-<strong>${xg.away}</strong> ? T ${xg.total}</span>`);
-  if(h2h&&h2h.total>=3)matchFacts.push(`<span class="match-fact">H2H ${h2h.team1wins}V ${h2h.draws}E ${h2h.team2wins}D ? ? ${h2h.avgGoals}/j</span>`);
-  const matchCenterFacts=matchFacts.length?`<div class="match-center-facts">${matchFacts.join('')}</div>`:'';
 
   const h2hRow=h2h&&h2h.total>=3?`
     <div style="display:flex;gap:5px;align-items:center;margin:3px 0;flex-wrap:wrap;">
@@ -4848,16 +4817,14 @@ function renderCard(pick,index,hf,af){
         <div class="team-side">
           <div class="team-line">${hLogo}<div class="team-name">${dH}</div></div>
           <div class="form-dots">${renderForm(hf)}</div>
-          ${hTeamFacts}
         </div>
-        <div class="vs-center"><div class="vs-badge">VS</div><div class="form-label-c">FORMA</div>${matchCenterFacts}</div>
+        <div class="vs-center"><div class="vs-badge">VS</div><div class="form-label-c">FORMA</div></div>
         <div class="team-side right">
           <div class="team-line">${aLogo}<div class="team-name">${dA}</div></div>
           <div class="form-dots">${renderForm(af,true)}</div>
-          ${aTeamFacts}
         </div>
       </div>
-      ${noDataBadge}${lowConfBadgeHoje}${(!hTeamFacts&&!aTeamFacts)?cornersRow+advRow+standingsRow:''}${!matchCenterFacts?xgRow+h2hRow:''}${refRow}
+      ${noDataBadge}${lowConfBadgeHoje}${cornersRow}${advRow}${standingsRow}${xgRow}${h2hRow}${refRow}
       <div class="odds-row">
         <div class="bet-tag ${marketClass(pick.marketType)}">${pick.bet}</div>
         <div class="odd-pill ${oddClass(pick.odd)}">${pick.isFriendly?'Sem odds':pick.noOdds?'📋 Sem odds':pick.isEstimated?`~${pick.odd.toFixed(2)} est.`:('@'+pick.odd.toFixed(2)+(pick.isCombo?' ~':''))}</div>
