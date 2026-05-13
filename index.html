@@ -2525,7 +2525,14 @@ async function checkPendingResults(){
   // Evaluate bet result from score
   const evalBet=(betStr,gh,ga,fhName,faName)=>{
     const b=betStr.trim();
+    const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const nb=norm(b);
     const total=(gh||0)+(ga||0);
+    const noMark=b.includes('✗')||b.includes('✘')||/\bX\b/.test(b);
+    const yesMark=b.includes('✓')||b.includes('✔');
+    const hasBtts=/ambas\s+marcam|btts/i.test(nb);
+    const isNoBtts=/(?:nao|no)\s+ambas\s+marcam|ambas\s+marcam\s*(?:x|✗|✘)|btts\s*(?:no|nao|x|✗|✘)/i.test(nb)||(hasBtts&&noMark);
+    const isYesBtts=hasBtts&&!isNoBtts||yesMark&&hasBtts;
 
     // DC+ combos (MUST check before simpler patterns)
     if(b.includes(' + ')){
@@ -2549,8 +2556,8 @@ async function checkPendingResults(){
     if(/^Under [\d.]+$/.test(b)){const line=parseFloat(b.match(/[\d.]+/)[0]);return total<line;}
 
     // BTTS
-    if(b==='Ambas Marcam ✓'||b==='Ambas Marcam'||b==='BTTS ✓')return gh>0&&ga>0;
-    if(b==='Não Ambas Marcam'||b==='BTTS ✗')return!(gh>0&&ga>0);
+    if(isNoBtts)return!(gh>0&&ga>0);
+    if(isYesBtts)return gh>0&&ga>0;
 
     // DC
     if(b==='Dupla Chance 1X'||b==='1X')return gh>=ga;
@@ -6339,6 +6346,13 @@ function renderMarketAcerto(bets){
   const grid=document.getElementById('market-acerto-grid');
   if(settled.length<3){sec.style.display='none';return;}
   sec.style.display='block';
+  const normMarketText=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const isNoBttsText=s=>{
+    const raw=String(s||'');
+    const n=normMarketText(raw);
+    return /(?:nao|no)\s+ambas/.test(n)||/ambas\s+marcam\s*(?:x|✗|✘)/i.test(raw)||/btts\s*(?:no|nao|x|✗|✘)/.test(n);
+  };
+  const isYesBttsText=s=>/ambas\s+marcam|btts/i.test(normMarketText(s))&&!isNoBttsText(s);
   const markets={
     '1X2 / Resultado':{w:0,l:0,profit:0},
     'Over (Mais golos)':{w:0,l:0,profit:0},
@@ -6368,14 +6382,14 @@ function renderMarketAcerto(bets){
     else if(b.bet.includes(' + ')){
       if(b.bet.includes('Over'))k='DC+ Over';
       else if(b.bet.includes('Under'))k='DC+ Under';
-      else if(b.bet.includes('Não Ambas'))k='DC+ Não Ambas';
-      else if(b.bet.includes('Ambas'))k='DC+ Ambas Marcam';
+      else if(isNoBttsText(b.bet))k='DC+ Não Ambas';
+      else if(isYesBttsText(b.bet))k='DC+ Ambas Marcam';
       else k='DC+ Over'; // fallback
     }
     else if(b.bet.includes('Over')||b.bet.startsWith('Mais'))k='Over (Mais golos)';
     else if(b.bet.includes('Under')||b.bet.startsWith('Menos'))k='Under (Menos golos)';
-    else if(b.bet.includes('Não Ambas'))k='Não Ambas Marcam';
-    else if(b.bet.includes('Ambas'))k='Ambas Marcam ✓';
+    else if(isNoBttsText(b.bet))k='Não Ambas Marcam';
+    else if(isYesBttsText(b.bet))k='Ambas Marcam ✓';
     else if(b.bet.includes('Dupla')||b.bet==='1X'||b.bet==='X2'||b.bet==='12')k='Dupla Chance';
     else if(b.bet==='Acumulador')k='Múltiplas';
     markets[k][b.result==='won'?'w':'l']++;
@@ -7584,6 +7598,13 @@ function runAutoInsights(){
 
   // Best & worst markets
   const byMarket={};
+  const normInsightMarketText=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const isNoBttsInsight=s=>{
+    const raw=String(s||'');
+    const n=normInsightMarketText(raw);
+    return /(?:nao|no)\s+ambas/.test(n)||/ambas\s+marcam\s*(?:x|✗|✘)/i.test(raw)||/btts\s*(?:no|nao|x|✗|✘)/.test(n);
+  };
+  const isYesBttsInsight=s=>/ambas\s+marcam|btts/i.test(normInsightMarketText(s))&&!isNoBttsInsight(s);
   all.forEach(b=>{
     let k='Outro';
     if(b.bet.startsWith('Vitória')||b.bet==='Empate')k='1X2';
@@ -7591,12 +7612,12 @@ function runAutoInsights(){
     else if(b.bet.startsWith('HT '))k='HT 1X2';
     else if(b.bet.includes(' + ')){
       if(b.bet.includes('Over'))k='DC+ Over';
-      else if(b.bet.includes('Não Ambas'))k='DC+ Não Ambas';
-      else if(b.bet.includes('Ambas'))k='DC+ Ambas';
+      else if(isNoBttsInsight(b.bet))k='DC+ Não Ambas';
+      else if(isYesBttsInsight(b.bet))k='DC+ Ambas';
     }
     else if(b.bet.includes('Over')||b.bet.includes('Under'))k='O/U';
-    else if(b.bet.includes('Não Ambas'))k='BTTS Não';
-    else if(b.bet.includes('Ambas'))k='BTTS Sim';
+    else if(isNoBttsInsight(b.bet))k='BTTS Não';
+    else if(isYesBttsInsight(b.bet))k='BTTS Sim';
     else if(b.bet.includes('Dupla')||['1X','X2','12'].includes(b.bet))k='DC';
     if(!byMarket[k])byMarket[k]={n:0,w:0,p:0,s:0};
     byMarket[k].n++;byMarket[k].s+=b.stake;byMarket[k].p+=b.profit;
