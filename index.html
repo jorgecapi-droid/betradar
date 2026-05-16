@@ -5259,17 +5259,25 @@ function generateMultiples(){
   if(sub)sub.textContent=`${poolUniq.length} jogos disponíveis hoje · Seleção automática por confiança e EV`;
 
   // CONSERVATIVE MULTIPLES — based on data analysis but realistic to fill
-  // Winning markets (h2h, btts, dc), confidence ≥6, avoid dead zone
+  // Cada acca tem critério de ordenação diferente para evitar selecções repetidas
+  // entre tabs. Dedup global garante que pick usado numa acca não aparece nas outras.
   const accaDefs=[
     {id:'safe', title:'🛡 Dupla Conservadora',   titleClass:'green',legs:2,
      filter:p=>(p.marketType==='h2h'||p.marketType==='btts')&&p.confidence>=6&&p.odd>=1.40&&p.odd<2.00,
-     desc:'2 picks · 1X2/BTTS · conf ≥6 · odds fora da dead zone.'},
+     sort:(a,b)=>(b.confidence||0)-(a.confidence||0),
+     desc:'2 picks · 1X2/BTTS · top confiança · odds fora da dead zone.'},
     {id:'value',title:'💡 Dupla de Valor',  titleClass:'gold', legs:2,
-     filter:p=>(p.marketType==='h2h'||p.marketType==='btts'||p.marketType==='dc')&&p.confidence>=5&&p.ev>=0&&p.odd>=1.40&&p.odd<2.00,
-     desc:'2 picks · EV ≥0 · conf ≥5 · sem dead zone.'},
+     filter:p=>(p.marketType==='h2h'||p.marketType==='btts'||p.marketType==='dc')&&p.confidence>=5&&p.odd>=1.40&&p.odd<2.00,
+     sort:(a,b)=>{
+       const ea=(a.evDc!=null?a.evDc:a.ev)||0;
+       const eb=(b.evDc!=null?b.evDc:b.ev)||0;
+       return eb-ea;
+     },
+     desc:'2 picks · ordenado por EV (DC) · 1X2/BTTS/DC · sem dead zone.'},
     {id:'bold', title:'🔥 Tripla Segura',   titleClass:'blue', legs:3,
      filter:p=>(p.marketType==='h2h'||p.marketType==='btts')&&p.confidence>=6&&p.odd>=1.40&&p.odd<2.00,
-     desc:'3 picks · só 1X2/BTTS · conf ≥6.'},
+     sort:(a,b)=>(a.odd||9)-(b.odd||9),
+     desc:'3 picks · ordenado por odd baixa · menor variância no combinado.'},
   ];
   const render3=[],render4=[],render5=[];
 
@@ -5325,11 +5333,17 @@ function generateMultiples(){
   const usedExperimental=new Set();
 
   // Conservative multiples → render3 (main tab)
-  // Uses full pool with per-acca dedup so we don't lose picks to global dedup
+  // Dedup GLOBAL entre accas conservadoras: pick usado numa acca não aparece nas outras.
+  // Sort per-acca (definido em acca.sort) para cada acca preferir picks diferentes.
   accaDefs.forEach((acca,ai)=>{
     const seenInAcca=new Set();
-    // Filtro principal com todos os requisitos
-    const strict=pool.filter(acca.filter).sort((a,b)=>composite(b)-composite(a)).filter(p=>{
+    // Filtro principal — exclui também picks já usados em accas anteriores (dedup global)
+    const strict=pool.filter(p=>{
+      if(!acca.filter(p))return false;
+      const key=`${p.home}|${p.away}|${p.bet}`;
+      if(usedConservative.has(key))return false;
+      return true;
+    }).sort(acca.sort||((a,b)=>composite(b)-composite(a))).filter(p=>{
       const k=`${p.home}|${p.away}`;if(seenInAcca.has(k))return false;seenInAcca.add(k);return true;
     });
     let picks=strict.slice(0,acca.legs);
@@ -5338,12 +5352,13 @@ function generateMultiples(){
     if(picks.length<acca.legs){
       const seenFallback=new Set();
       const relaxed=pool.filter(p=>{
-        // Só manter o filtro de mercado e odds, relaxar confiança/EV
-        if(p.marketType==='combo')return false; // nunca combos no fallback
+        const key=`${p.home}|${p.away}|${p.bet}`;
+        if(usedConservative.has(key))return false; // respeita dedup global no fallback também
+        if(p.marketType==='combo')return false;
         const baseType=acca.filter.toString().includes('h2h')?
           (p.marketType==='h2h'||p.marketType==='btts'||p.marketType==='dc'):true;
         return baseType&&p.odd>=1.30&&p.odd<2.50;
-      }).sort((a,b)=>composite(b)-composite(a)).filter(p=>{
+      }).sort(acca.sort||((a,b)=>composite(b)-composite(a))).filter(p=>{
         const k=`${p.home}|${p.away}`;if(seenFallback.has(k)||strict.some(s=>`${s.home}|${s.away}`===k))return false;
         seenFallback.add(k);return true;
       });
@@ -5351,6 +5366,8 @@ function generateMultiples(){
       picks=[...picks,...relaxed.slice(0,needed).map(p=>({...p,_partial:true}))];
       hasPartial=picks.some(p=>p._partial);
     }
+    // Marca picks como "usados" para excluir das próximas accas
+    picks.forEach(p=>usedConservative.add(`${p.home}|${p.away}|${p.bet}`));
     render3.push(buildCard(acca,picks,ai%3,hasPartial));
   });
 
