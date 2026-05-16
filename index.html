@@ -2525,14 +2525,7 @@ async function checkPendingResults(){
   // Evaluate bet result from score
   const evalBet=(betStr,gh,ga,fhName,faName)=>{
     const b=betStr.trim();
-    const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    const nb=norm(b);
     const total=(gh||0)+(ga||0);
-    const noMark=b.includes('✗')||b.includes('✘')||/\bX\b/.test(b);
-    const yesMark=b.includes('✓')||b.includes('✔');
-    const hasBtts=/ambas\s+marcam|btts/i.test(nb);
-    const isNoBtts=/(?:nao|no)\s+ambas\s+marcam|ambas\s+marcam\s*(?:x|✗|✘)|btts\s*(?:no|nao|x|✗|✘)/i.test(nb)||(hasBtts&&noMark);
-    const isYesBtts=hasBtts&&!isNoBtts||yesMark&&hasBtts;
 
     // DC+ combos (MUST check before simpler patterns)
     if(b.includes(' + ')){
@@ -2556,8 +2549,8 @@ async function checkPendingResults(){
     if(/^Under [\d.]+$/.test(b)){const line=parseFloat(b.match(/[\d.]+/)[0]);return total<line;}
 
     // BTTS
-    if(isNoBtts)return!(gh>0&&ga>0);
-    if(isYesBtts)return gh>0&&ga>0;
+    if(b==='Ambas Marcam ✓'||b==='Ambas Marcam'||b==='BTTS ✓')return gh>0&&ga>0;
+    if(b==='Não Ambas Marcam'||b==='BTTS ✗')return!(gh>0&&ga>0);
 
     // DC
     if(b==='Dupla Chance 1X'||b==='1X')return gh>=ga;
@@ -3083,7 +3076,9 @@ function widgetAdd(wid,home,away,bet,odd,league,time,date,source='top15',topRank
     addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,
     marketType:pick?.marketType||'h2h',group:pick?.group||'soccer',
     fixtureId,leagueId:pick?.leagueId||null,home,away,source,topRank,
-    confidence:pick?.confidence||null});
+    confidence:pick?.confidence||null,
+    ev:pick?.ev??null,evDc:pick?.evDc??null,dcProb:pick?.dcProb??null,
+    lambdaH:pick?.lambdaH??null,lambdaA:pick?.lambdaA??null});
   // Update button/row immediately without re-render.
   // Há dois layouts: (a) Top 15 / Market Top 10 — botão com .widget-add-btn[data-wid];
   // (b) Widget compacto — div.widget-row com id="${wid}" e ícone .widget-add.
@@ -4637,6 +4632,12 @@ function renderCard(pick,index,hf,af){
   const probCls=pick.prob>=70?'high':pick.prob>=60?'med':'low2';
   const evClass=pick.ev>0?'value-pos':'value-neg';
   const evStr=pick.ev>0?`▲ +${pick.ev}%`:`▼ ${pick.ev}%`;
+  // Dixon-Coles secondary EV (modelo paralelo)
+  const hasDc=pick.evDc!==undefined&&pick.evDc!==null;
+  const evDcStr=hasDc?`DC ${pick.evDc>0?'+':''}${pick.evDc}%`:'';
+  const evDcClass=hasDc?(pick.evDc>0?'value-pos':'value-neg'):'';
+  // Sinal visual quando os dois modelos divergem muito (>5pp)
+  const dcDiverges=hasDc&&Math.abs(pick.evDc-pick.ev)>=5;
   const delay=Math.min(index*0.035,0.7).toFixed(2);
   const now2=new Date();const season=now2.getMonth()<7?now2.getFullYear()-1:now2.getFullYear();
   const standings=pick.leagueId?(standingsCache[`homeaway_${pick.leagueId}_${season}`]||standingsCache[`${pick.leagueId}_${season}`]):null;
@@ -4666,11 +4667,14 @@ function renderCard(pick,index,hf,af){
   const confBarWidth=Math.round(conf*10);
   const confDots=Array.from({length:10},(_,i)=>`<div style="width:5px;height:5px;border-radius:50%;flex-shrink:0;background:${i<conf?confColor(conf):'var(--border)'}"></div>`).join('');
 
-  // xG estimado row
-  const xg=pick.group==='soccer'?calcXG(hStats,aStats,true,pick.home,pick.away):null;
+  // xG estimado — preferir λ do Dixon-Coles (mais preciso) quando disponível, fallback para calcXG
+  const xgFromDc=(pick.lambdaH!=null&&pick.lambdaA!=null)?{home:pick.lambdaH,away:pick.lambdaA,total:+(pick.lambdaH+pick.lambdaA).toFixed(2),source:'DC'}:null;
+  const xgCalc=pick.group==='soccer'?calcXG(hStats,aStats,true,pick.home,pick.away):null;
+  const xg=xgFromDc||xgCalc;
+  const xgSourceLabel=xgFromDc?'<span style="font-size:8px;color:var(--accent);margin-left:4px;" title="Dixon-Coles">DC</span>':'';
   const xgRow=xg?`
     <div style="display:flex;gap:5px;align-items:center;margin:3px 0;flex-wrap:wrap;">
-      <span style="font-size:9px;color:var(--muted);text-transform:uppercase;">xG est.:</span>
+      <span style="font-size:9px;color:var(--muted);text-transform:uppercase;">xG est.:${xgSourceLabel}</span>
       <span style="font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;">
         🏠 ${xg.home} — ✈️ ${xg.away} · Total: ${xg.total}
       </span>
@@ -4836,6 +4840,7 @@ function renderCard(pick,index,hf,af){
         <div class="bet-tag ${marketClass(pick.marketType)}">${pick.bet}</div>
         <div class="odd-pill ${oddClass(pick.odd)}">${pick.isFriendly?'Sem odds':pick.noOdds?'📋 Sem odds':pick.isEstimated?`~${pick.odd.toFixed(2)} est.`:('@'+pick.odd.toFixed(2)+(pick.isCombo?' ~':''))}</div>
         <div class="value-badge ${evClass}">${evStr}</div>
+        ${hasDc?`<div class="value-badge ${evDcClass}" style="font-size:9px;opacity:.85;border-style:dashed;${dcDiverges?'box-shadow:0 0 0 1px rgba(245,200,66,.4);':''}" title="Dixon-Coles (modelo paralelo)${dcDiverges?' · diverge do EV principal':''}">${evDcStr}</div>`:''}
         <div class="prob-bar-wrap">
           <div class="prob-label">Prob. justa <span>${pick.prob}%</span>${pick.isCombo?'<span style="font-size:8px;color:var(--muted);"> estimada</span>':''}</div>
           <div class="prob-bar"><div class="prob-fill ${probCls}" style="width:0%" data-target="${pick.prob}"></div></div>
@@ -5536,7 +5541,42 @@ function renderDetailedStats(bets){
 
 // ── HISTORY RENDER ────────────────────────────────────────────────
 function setHF(f,btn){historyFilter=f;document.querySelectorAll('.hf-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderHistory();}
+
+// Cache em memória do CLV vindo do worker. Populado uma vez por sessão (lazy).
+let workerClvMap = null;
+let workerClvLoading = false;
+async function loadWorkerClvMap(){
+  if (workerClvMap || workerClvLoading) return workerClvMap;
+  workerClvLoading = true;
+  try {
+    const res = await fetch(`${WORKER_URL}/history`);
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const map = {};
+    (data.days || []).forEach(day => {
+      (day.picks || []).forEach(p => {
+        if (p.fixtureId && p.bet && p.clvPct != null) {
+          const key = `${p.fixtureId}|${p.bet}`;
+          map[key] = { clvPct: p.clvPct, oddAtPick: p.oddAtPick, oddClose: p.oddClose };
+        }
+      });
+    });
+    workerClvMap = map;
+    console.log(`CLV: ${Object.keys(map).length} settled picks com CLV carregados do worker`);
+  } catch (e) {
+    console.warn('CLV load failed:', e.message);
+    workerClvMap = {}; // mark as loaded (empty) para não retentar a cada render
+  } finally {
+    workerClvLoading = false;
+  }
+  return workerClvMap;
+}
+
 function renderHistory(){
+  // Carregar CLV map em background (não bloqueante). Re-renderiza quando chegar.
+  if (!workerClvMap && !workerClvLoading) {
+    loadWorkerClvMap().then(() => { try { renderHistory(); } catch(e){} });
+  }
   const bets=loadHistory();
   const won=bets.filter(b=>b.result==='won').length,lost=bets.filter(b=>b.result==='lost').length;
   const pending=bets.filter(b=>b.result==='pending').length;
@@ -5643,6 +5683,23 @@ function renderHistory(){
           if(src==='multiples_test'||(src&&src.startsWith('multiple_exp_')))return` · <span style="color:#f4c542;font-size:9px;">${SRC_LABELS[src]||'🧪 Múltipla Teste'}</span>`;
           if(src==='multiples_special'||(src&&src.startsWith('multiple_')&&b.category==='multiples_special'))return` · <span style="color:#8b5cf6;font-size:9px;">${SRC_LABELS[src]||'🚀 Múltipla Especial'}</span>`;
           return'';
+        })()}${(()=>{
+          // EV badges: actual + Dixon-Coles (quando disponíveis)
+          const out=[];
+          if(b.ev!=null)out.push(` · <span style="font-size:9px;color:${b.ev>0?'var(--accent)':'var(--red)'};font-family:'DM Mono',monospace;">EV ${b.ev>0?'+':''}${b.ev}%</span>`);
+          if(b.evDc!=null){
+            const diverges=b.ev!=null&&Math.abs(b.evDc-b.ev)>=5;
+            out.push(` · <span style="font-size:9px;color:${b.evDc>0?'var(--accent)':'var(--red)'};font-family:'DM Mono',monospace;border:1px dashed ${b.evDc>0?'rgba(0,229,160,.3)':'rgba(255,71,87,.3)'};border-radius:3px;padding:0 4px;${diverges?'box-shadow:0 0 0 1px rgba(245,200,66,.4);':''}" title="Dixon-Coles${diverges?' · diverge do EV principal':''}">DC ${b.evDc>0?'+':''}${b.evDc}%</span>`);
+          }
+          if(b.lambdaH!=null&&b.lambdaA!=null)out.push(` · <span style="font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;" title="xG via Dixon-Coles">xG ${b.lambdaH.toFixed(1)}–${b.lambdaA.toFixed(1)}</span>`);
+          // CLV (Close Value Line) — vindo do worker para picks já settled
+          if(b.fixtureId&&workerClvMap&&workerClvMap[`${b.fixtureId}|${b.bet}`]){
+            const c=workerClvMap[`${b.fixtureId}|${b.bet}`];
+            const clvColor=c.clvPct>0?'var(--accent)':c.clvPct<0?'var(--red)':'var(--muted)';
+            const clvArrow=c.clvPct>0?'▲':c.clvPct<0?'▼':'·';
+            out.push(` · <span style="font-size:9px;color:${clvColor};font-family:'DM Mono',monospace;font-weight:600;" title="Close Value Line: odd abertura ${c.oddAtPick?.toFixed(2)} → fecho ${c.oddClose?.toFixed(2)}">CLV ${clvArrow}${c.clvPct>0?'+':''}${c.clvPct}%</span>`);
+          }
+          return out.join('');
         })()}</div>
         ${expandBtn}${legsPanel}
       </div>
@@ -6346,13 +6403,6 @@ function renderMarketAcerto(bets){
   const grid=document.getElementById('market-acerto-grid');
   if(settled.length<3){sec.style.display='none';return;}
   sec.style.display='block';
-  const normMarketText=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  const isNoBttsText=s=>{
-    const raw=String(s||'');
-    const n=normMarketText(raw);
-    return /(?:nao|no)\s+ambas/.test(n)||/ambas\s+marcam\s*(?:x|✗|✘)/i.test(raw)||/btts\s*(?:no|nao|x|✗|✘)/.test(n);
-  };
-  const isYesBttsText=s=>/ambas\s+marcam|btts/i.test(normMarketText(s))&&!isNoBttsText(s);
   const markets={
     '1X2 / Resultado':{w:0,l:0,profit:0},
     'Over (Mais golos)':{w:0,l:0,profit:0},
@@ -6382,14 +6432,14 @@ function renderMarketAcerto(bets){
     else if(b.bet.includes(' + ')){
       if(b.bet.includes('Over'))k='DC+ Over';
       else if(b.bet.includes('Under'))k='DC+ Under';
-      else if(isNoBttsText(b.bet))k='DC+ Não Ambas';
-      else if(isYesBttsText(b.bet))k='DC+ Ambas Marcam';
+      else if(b.bet.includes('Não Ambas'))k='DC+ Não Ambas';
+      else if(b.bet.includes('Ambas'))k='DC+ Ambas Marcam';
       else k='DC+ Over'; // fallback
     }
     else if(b.bet.includes('Over')||b.bet.startsWith('Mais'))k='Over (Mais golos)';
     else if(b.bet.includes('Under')||b.bet.startsWith('Menos'))k='Under (Menos golos)';
-    else if(isNoBttsText(b.bet))k='Não Ambas Marcam';
-    else if(isYesBttsText(b.bet))k='Ambas Marcam ✓';
+    else if(b.bet.includes('Não Ambas'))k='Não Ambas Marcam';
+    else if(b.bet.includes('Ambas'))k='Ambas Marcam ✓';
     else if(b.bet.includes('Dupla')||b.bet==='1X'||b.bet==='X2'||b.bet==='12')k='Dupla Chance';
     else if(b.bet==='Acumulador')k='Múltiplas';
     markets[k][b.result==='won'?'w':'l']++;
@@ -6695,6 +6745,11 @@ function renderTop15(){
     const lowConfBadge=pickIsLowConfidence(pick)?`<span style="font-size:9px;padding:2px 6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;border-radius:4px;margin-left:6px;">⚠️ Baixa confiança</span>`:'';
     const evClass=pick.ev>0?'value-pos':'value-neg';
     const evStr=pick.ev>0?`+${pick.ev}%`:`${pick.ev}%`;
+    // Dixon-Coles
+    const hasDc=pick.evDc!==undefined&&pick.evDc!==null;
+    const evDcStr=hasDc?`DC ${pick.evDc>0?'+':''}${pick.evDc}%`:'';
+    const evDcClass=hasDc?(pick.evDc>0?'value-pos':'value-neg'):'';
+    const dcDiverges=hasDc&&Math.abs(pick.evDc-pick.ev)>=5;
     const added=loadHistory().some(h=>h.match===`${pick.home} vs ${pick.away}`&&h.bet===pick.bet);
     const tid=`t10-${i}`;
 
@@ -6710,8 +6765,8 @@ function renderTop15(){
       <span style="color:var(--text2)">${pick.home.split(' ')[0]}:</span> ⚽${hStats.goalsForAvg}/${hStats.goalsAgainstAvg} &nbsp;
       <span style="color:var(--text2)">${pick.away.split(' ')[0]}:</span> ⚽${aStats.goalsForAvg}/${aStats.goalsAgainstAvg}
     </div>`:'';
-    const xg=pick.xg;
-    const xgRow=xg?`<div style="font-size:10px;color:var(--muted);margin-top:3px;">xG: <span style="color:var(--text)">${xg.home.toFixed(1)}</span> — <span style="color:var(--text)">${xg.away.toFixed(1)}</span></div>`:'';
+    const xg=(pick.lambdaH!=null&&pick.lambdaA!=null)?{home:pick.lambdaH,away:pick.lambdaA,_dc:true}:pick.xg;
+    const xgRow=xg?`<div style="font-size:10px;color:var(--muted);margin-top:3px;">xG${xg._dc?' (DC)':''}: <span style="color:var(--text)">${xg.home.toFixed(1)}</span> — <span style="color:var(--text)">${xg.away.toFixed(1)}</span></div>`:'';
     const formRow=(hf.length||af.length)?`<div style="font-size:10px;color:var(--muted);margin-top:3px;">
       <span style="color:var(--text2)">${pick.home.split(' ')[0]}:</span> ${hForm||'—'} &nbsp;
       <span style="color:var(--text2)">${pick.away.split(' ')[0]}:</span> ${aForm||'—'}
@@ -6740,6 +6795,7 @@ function renderTop15(){
       <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap;">
         <span class="bet-tag ${marketClass(pick.marketType)}" style="font-size:10px;">${pick.bet}</span>
         <span class="value-badge ${evClass}" style="font-size:10px;padding:2px 7px;">${evStr}</span>
+        ${hasDc?`<span class="value-badge ${evDcClass}" style="font-size:9px;padding:2px 6px;opacity:.85;border-style:dashed;${dcDiverges?'box-shadow:0 0 0 1px rgba(245,200,66,.4);':''}" title="Dixon-Coles${dcDiverges?' · diverge do EV principal':''}">${evDcStr}</span>`:''}
         <span style="font-size:10px;font-family:'DM Mono',monospace;color:${confColor(pick.confidence)};">⭐${pick.confidence}/10</span>
         ${partialBadge}${lowConfBadge}
         <span style="font-size:10px;color:var(--muted);margin-left:auto;">${pick.league}</span>
@@ -7598,13 +7654,6 @@ function runAutoInsights(){
 
   // Best & worst markets
   const byMarket={};
-  const normInsightMarketText=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  const isNoBttsInsight=s=>{
-    const raw=String(s||'');
-    const n=normInsightMarketText(raw);
-    return /(?:nao|no)\s+ambas/.test(n)||/ambas\s+marcam\s*(?:x|✗|✘)/i.test(raw)||/btts\s*(?:no|nao|x|✗|✘)/.test(n);
-  };
-  const isYesBttsInsight=s=>/ambas\s+marcam|btts/i.test(normInsightMarketText(s))&&!isNoBttsInsight(s);
   all.forEach(b=>{
     let k='Outro';
     if(b.bet.startsWith('Vitória')||b.bet==='Empate')k='1X2';
@@ -7612,12 +7661,12 @@ function runAutoInsights(){
     else if(b.bet.startsWith('HT '))k='HT 1X2';
     else if(b.bet.includes(' + ')){
       if(b.bet.includes('Over'))k='DC+ Over';
-      else if(isNoBttsInsight(b.bet))k='DC+ Não Ambas';
-      else if(isYesBttsInsight(b.bet))k='DC+ Ambas';
+      else if(b.bet.includes('Não Ambas'))k='DC+ Não Ambas';
+      else if(b.bet.includes('Ambas'))k='DC+ Ambas';
     }
     else if(b.bet.includes('Over')||b.bet.includes('Under'))k='O/U';
-    else if(isNoBttsInsight(b.bet))k='BTTS Não';
-    else if(isYesBttsInsight(b.bet))k='BTTS Sim';
+    else if(b.bet.includes('Não Ambas'))k='BTTS Não';
+    else if(b.bet.includes('Ambas'))k='BTTS Sim';
     else if(b.bet.includes('Dupla')||['1X','X2','12'].includes(b.bet))k='DC';
     if(!byMarket[k])byMarket[k]={n:0,w:0,p:0,s:0};
     byMarket[k].n++;byMarket[k].s+=b.stake;byMarket[k].p+=b.profit;
