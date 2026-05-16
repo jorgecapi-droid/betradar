@@ -3272,6 +3272,104 @@ function detectSharpMoney(pick){
     return null;
   }catch{return null;}
 }
+// Helper compartilhado: contexto qualitativo da forma (W/D/L → frase)
+function formCtxQual(form,pt){
+  if(!form||form.length<3)return '';
+  const w=form.filter(r=>r==='W').length;
+  const d=form.filter(r=>r==='D').length;
+  const l=form.filter(r=>r==='L').length;
+  const last3=form.slice(0,3);
+  const last3w=last3.filter(r=>r==='W').length;
+  const last3l=last3.filter(r=>r==='L').length;
+  if(last3w===3)return pt?'em série positiva':'on hot streak';
+  if(last3l===3)return pt?'em crise':'struggling badly';
+  if(w>=4)return pt?'em grande forma':'in great form';
+  if(w===0&&l>=3)return pt?'em fase muito difícil':'in tough patch';
+  if(w>=3)return pt?'em boa fase':'in good form';
+  if(l>=3)return pt?'em fase irregular':'in rough patch';
+  if(w>=2&&l===0)return pt?'em recuperação':'recovering';
+  if(d>=3)return pt?'inconstante':'inconsistent';
+  return pt?'forma irregular':'mixed form';
+}
+
+// Helper compartilhado: resumo comparativo (mesma lógica do BlitzTips)
+function buildComparativeSummary(pick,hs,as_,hForm,aForm){
+  if(!hs&&!as_)return '';
+  const bet=(pick.bet||'').toLowerCase();
+  const homeLow=(pick.home||'').toLowerCase();
+  const awayLow=(pick.away||'').toLowerCase();
+  const hForm5=formCtxQual(hForm,true);
+  const aForm5=formCtxQual(aForm,true);
+  const isOver=bet.includes('over');
+  const isUnder=bet.includes('under');
+  const isBttsYes=(bet.includes('ambas')&&!bet.includes('✗')&&!bet.includes('não')&&!bet.includes('nao'))||(bet.includes('btts')&&bet.includes('✓'));
+  const isBttsNo=bet.includes('✗')||(bet.includes('ambas')&&(bet.includes('não')||bet.includes('nao')));
+  const isHomeWin=bet===('vitória '+homeLow)||bet===('vitoria '+homeLow);
+  const isAwayWin=bet===('vitória '+awayLow)||bet===('vitoria '+awayLow);
+  const is1X=bet==='1x'||bet.startsWith('1x ')||bet.startsWith('1x+');
+  const isX2=bet==='x2'||bet.startsWith('x2 ')||bet.startsWith('x2+');
+  // Map stats from BetRadar format (goalsForAvgHome, goalsForAvgAway, etc.)
+  const ha=hs?.goalsForAvgHome||hs?.goalsForAvg||0;
+  const hd=hs?.goalsAgainstAvgHome||hs?.goalsAgainstAvg||0;
+  const aa=as_?.goalsForAvgAway||as_?.goalsForAvg||0;
+  const ad=as_?.goalsAgainstAvgAway||as_?.goalsAgainstAvg||0;
+  if(isHomeWin&&ha&&ad){
+    const advantage=ha>ad;
+    const main=advantage?`Ataque do ${pick.home} em casa (${ha.toFixed(1)} g/j) supera defesa do ${pick.away} fora (${ad.toFixed(1)} sofridos)`:`Equipas equilibradas em ataque vs defesa — valor pela odd`;
+    const form=(hForm5&&aForm5)?` Forma: ${pick.home} ${hForm5}, ${pick.away} ${aForm5}.`:'.';
+    return main+form;
+  }
+  if(isAwayWin&&aa&&hd){
+    const advantage=aa>hd;
+    const main=advantage?`Ataque do ${pick.away} fora (${aa.toFixed(1)} g/j) supera defesa do ${pick.home} em casa (${hd.toFixed(1)} sofridos)`:`Visita em valor — diferencial pequeno mas com odd interessante`;
+    const form=(hForm5&&aForm5)?` Forma: ${pick.away} ${aForm5}, ${pick.home} ${hForm5}.`:'.';
+    return main+form;
+  }
+  if(isOver&&ha&&aa){
+    const total=(ha+aa+hd+ad)/2;
+    if(total>2.8)return `Média conjunta de ${total.toFixed(1)} g/jogo — perfil aberto.`;
+    if(total<2.0)return `Médias baixas (${total.toFixed(1)} g/j conjunto) — Over apoiado pela odd, não pelos números.`;
+    return `Média de ${total.toFixed(1)} g/jogo — Over com algum suporte estatístico.`;
+  }
+  if(isUnder&&ha&&aa){
+    const total=(ha+aa+hd+ad)/2;
+    if(total<2.3)return `Médias defensivas (${total.toFixed(1)} g/j conjunto) — perfil fechado.`;
+    if(total>3.0)return `Médias altas (${total.toFixed(1)} g/j) — Under contra-tendência, valor apenas na odd.`;
+    return `Média de ${total.toFixed(1)} g/jogo — Under tem espaço se uma das defesas estabilizar.`;
+  }
+  if(isBttsYes&&ha&&aa){
+    if(ha>=1.1&&aa>=1.1)return `Ambas com ataque consistente (${ha.toFixed(1)} em casa, ${aa.toFixed(1)} fora). BTTS bem suportado.`;
+    return `Ataques irregulares mas mercado precifica padrão de golos.`;
+  }
+  if(isBttsNo&&hd!=null&&ad!=null){
+    const solidH=hd<1,solidA=ad<1;
+    if(solidH||solidA){
+      const team=hd<ad?pick.home:pick.away;
+      const val=Math.min(hd||9,ad||9).toFixed(1);
+      return `${team} sólido defensivamente (${val} sofridos/j) — clean sheet provável.`;
+    }
+    return `Defesas equilibradas — Não BTTS pelo valor.`;
+  }
+  if(is1X)return `1X cobre vitória ou empate do ${pick.home} em casa.${hForm5?' '+pick.home+' '+hForm5+'.':''}`;
+  if(isX2)return `X2 cobre vitória ou empate do ${pick.away}.${aForm5?' '+pick.away+' '+aForm5+'.':''}`;
+  return '';
+}
+
+// Helper compartilhado: linha de contexto Dixon-Coles
+function dcContextLine(pick,pt){
+  if(pick.lambdaH==null||pick.lambdaA==null)return '';
+  const xg=`${pick.lambdaH.toFixed(1)}−${pick.lambdaA.toFixed(1)}`;
+  if(pick.dcProb!=null){
+    const probPct=Math.round(pick.dcProb*100);
+    let strength;
+    if(probPct>=60)strength=pt?'forte':'strong';
+    else if(probPct>=45)strength=pt?'moderado':'moderate';
+    else strength=pt?'fraco':'weak';
+    return pt?`Modelo Dixon-Coles: xG ${xg}, prob ${probPct}% (suporte ${strength})`:`Dixon-Coles model: xG ${xg}, prob ${probPct}% (${strength} support)`;
+  }
+  return pt?`Modelo: xG ${xg}`:`Model: xG ${xg}`;
+}
+
 function genAI(pick,hf,af,hs,as_){
   const ev=pick.ev,odd=pick.odd,prob=pick.prob,conf=pick.confidence;
   const isHome=pick.bet.includes(pick.home)||pick.bet.includes('1X');
@@ -3374,6 +3472,10 @@ function genAI(pick,hf,af,hs,as_){
   // Don't block analysis for mildly negative EV — still show the data
 
   const lines=[];
+
+  // Resumo comparativo (estilo BlitzTips) — frase inicial concisa
+  const compSummary=buildComparativeSummary(pick,hs,as_,hf,af);
+  if(compSummary)lines.push(compSummary.replace(/\.$/,''));
 
   // Sharp money detection
   const sharp=detectSharpMoney(pick);
@@ -3524,6 +3626,9 @@ function genAI(pick,hf,af,hs,as_){
   }
 
   if(lines.length>0){
+    // Append Dixon-Coles context line (xG + prob) when available
+    const dcLine=dcContextLine(pick,true);
+    if(dcLine)lines.push(dcLine);
     const verdict=ev>5?'<strong>Valor positivo.</strong>':ev>0?'EV ligeiro.':'<strong>EV negativo.</strong>';
     lines.push(`${verdict} Confiança: ${conf}/10`);
     return lines.join('. ')+'.';
