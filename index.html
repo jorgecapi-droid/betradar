@@ -5292,7 +5292,7 @@ function generateMultiples(){
   ];
   const render3=[],render4=[],render5=[];
 
-  function buildCard(acca,picks,delay,hasPartial=false){
+  function buildCard(acca,picks,delay,hasPartial=false,wasRegenerated=false){
     if(picks.length<acca.legs){
       return`<div class="acca-card" style="animation-delay:${delay*0.1}s"><div class="acca-header"><div class="acca-title ${acca.titleClass}">${acca.title}</div></div><div style="padding:16px;color:var(--muted);font-size:12px;">Não há picks suficientes de hoje para esta combinação.</div></div>`;
     }
@@ -5308,9 +5308,13 @@ function generateMultiples(){
     // Store legs in a global map to avoid JSON escaping issues in onclick
     if(!window._accaLegs)window._accaLegs={};
     window._accaLegs[accaId]=picks.map((p,i)=>({n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,betDisplay:`${p.bet} · ${p.league}`,odd:`@${p.odd.toFixed(2)}`,oddVal:p.odd,date:p.date,league:p.league,result:'pending'}));
+    // Metadata da acca — útil para tracking de regenerados no histórico (backtest)
+    if(!window._accaMeta)window._accaMeta={};
+    window._accaMeta[accaId]={regenerated:wasRegenerated};
+    const regenBadge=wasRegenerated?'<span style="font-size:9px;color:var(--muted);background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.2);border-radius:4px;padding:1px 5px;margin-left:6px;" title="Múltipla gerada após clique em ↻ Gerar Novamente">↻ regen</span>':'';
     return`<div class="acca-card" style="animation-delay:${delay*0.1}s">
       <div class="acca-header">
-        <div class="acca-title ${acca.titleClass}">${acca.title}</div>
+        <div class="acca-title ${acca.titleClass}">${acca.title}${regenBadge}</div>
         <div class="acca-meta">
           <div class="acca-legs-count">${acca.legs} sel.</div>
           <div class="acca-odd">@${totalOdd.toFixed(2)}</div>
@@ -5349,6 +5353,7 @@ function generateMultiples(){
   // Quando _multRegen=true (user clicou "Gerar novamente"), shuffle dos candidatos
   // para produzir combinações diferentes em cada clique mantendo qualidade.
   const shuffleArr=arr=>{const r=[...arr];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;};
+  const wasRegenerated=!!_multRegen; // capturar estado antes do reset
   accaDefs.forEach((acca,ai)=>{
     const seenInAcca=new Set();
     // Pool alargado de candidatos (3× o necessário) para ter variedade ao shuffle
@@ -5388,7 +5393,7 @@ function generateMultiples(){
     }
     // Marca picks como "usados" para excluir das próximas accas
     picks.forEach(p=>usedConservative.add(`${p.home}|${p.away}|${p.bet}`));
-    render3.push(buildCard(acca,picks,ai%3,hasPartial));
+    render3.push(buildCard(acca,picks,ai%3,hasPartial,wasRegenerated));
   });
 
   // Reset flag depois de gerar — próxima chamada não-regenerate volta a usar ordem determinística
@@ -5512,6 +5517,7 @@ function addAccaToHistory(id,title,odd){
   const stake=parseFloat(document.getElementById(`${id}-stake`)?.value||10);
   if(isNaN(stake)||stake<=0){alert('Insere um valor válido');return;}
   const legs=(window._accaLegs&&window._accaLegs[id])||[];
+  const meta=(window._accaMeta&&window._accaMeta[id])||{};
   // Extract specific multiple ID from element id (e.g., "acca-safe" → "safe", "acca-exp_tripla_safe" → "exp_tripla_safe")
   const multipleId=id.replace(/^acca-/,'');
   // Save both the specific source and generic category for backwards compatibility
@@ -5519,7 +5525,7 @@ function addAccaToHistory(id,title,odd){
   if(multipleId.startsWith('exp_'))category='multiples_test';
   else if(['ligapt','overgoals','btts3','bttsno3','dc3','combo3','combo1x_over','combo_x2_over','h2h_safe3','h2h_value3','topconf5','value5'].includes(multipleId))category='multiples_special';
   const source=`multiple_${multipleId}`;
-  addBet({id:Date.now().toString(),match:`Múltipla: ${title}`,bet:'Acumulador',odd,stake,league:'Múltipla',time:'—',date:new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,legs,source,category});
+  addBet({id:Date.now().toString(),match:`Múltipla: ${title}`,bet:'Acumulador',odd,stake,league:'Múltipla',time:'—',date:new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,legs,source,category,regenerated:!!meta.regenerated});
   const btn=document.getElementById(`${id}-btn`);
   if(btn){btn.textContent='✓ Adicionada';btn.classList.add('added');btn.disabled=true;}
   showToast('✅ Múltipla adicionada ao histórico!');
@@ -5824,7 +5830,7 @@ function renderHistory(){
           if(src==='top10_corners')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top Cantos${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='top10_ht')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top HT${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='multiples')return` · <span style="color:#8b5cf6;font-size:9px;">🎰 Múltipla</span>`;
-          if(src==='multiples_conservative'||(src&&src.startsWith('multiple_')&&b.category==='multiples_conservative'))return` · <span style="color:#00e5a0;font-size:9px;">${SRC_LABELS[src]||'🛡 Múltipla Conservadora'}</span>`;
+          if(src==='multiples_conservative'||(src&&src.startsWith('multiple_')&&b.category==='multiples_conservative'))return` · <span style="color:#00e5a0;font-size:9px;">${SRC_LABELS[src]||'🛡 Múltipla Conservadora'}</span>${b.regenerated?' · <span style="font-size:9px;color:var(--muted);background:rgba(245,200,66,.1);border-radius:3px;padding:0 4px;" title="Múltipla gerada após regenerar">↻ regen</span>':''}`;
           if(src==='multiples_test'||(src&&src.startsWith('multiple_exp_')))return` · <span style="color:#f4c542;font-size:9px;">${SRC_LABELS[src]||'🧪 Múltipla Teste'}</span>`;
           if(src==='multiples_special'||(src&&src.startsWith('multiple_')&&b.category==='multiples_special'))return` · <span style="color:#8b5cf6;font-size:9px;">${SRC_LABELS[src]||'🚀 Múltipla Especial'}</span>`;
           return'';
