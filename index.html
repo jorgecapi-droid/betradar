@@ -843,7 +843,7 @@
         <div class="multiples-title">🎰 Apostas Múltiplas do Dia</div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px;" id="multiples-subtitle">Apenas jogos de hoje e amanhã · Seleção automática por confiança e EV</div>
       </div>
-      <button class="regen-btn" onclick="generateMultiples()"><span>↻</span> Gerar novamente</button>
+      <button class="regen-btn" onclick="regenerateMultiples()"><span>↻</span> Gerar novamente</button>
     </div>
     <div class="sub-tabs">
       <button class="sub-tab active" onclick="showSubPage('legs3',this)">🛡 Conservadoras<span class="sub-tab-count">Filtros apertados</span></button>
@@ -5202,6 +5202,10 @@ function addToBetslip(index,home,away,bet,odd,league,time,date,source='picks'){
 }
 
 // ── MULTIPLES ─────────────────────────────────────────────────────
+// Flag para sinalizar que o user clicou "Gerar novamente" — activa shuffle nos
+// candidatos para que cada clique produza combinações diferentes (mantendo qualidade).
+let _multRegen=false;
+function regenerateMultiples(){_multRegen=true;generateMultiples();}
 function generateMultiples(){
   if(allGames.length===0){
     ['3','4','5'].forEach(n=>document.getElementById(`multiples-list-${n}`).innerHTML='<div class="empty-state"><div class="ei">🎰</div><p>Carrega primeiro os picks do dia.</p></div>');
@@ -5342,15 +5346,22 @@ function generateMultiples(){
   // Conservative multiples → render3 (main tab)
   // Dedup GLOBAL entre accas conservadoras: pick usado numa acca não aparece nas outras.
   // Sort per-acca (definido em acca.sort) para cada acca preferir picks diferentes.
+  // Quando _multRegen=true (user clicou "Gerar novamente"), shuffle dos candidatos
+  // para produzir combinações diferentes em cada clique mantendo qualidade.
+  const shuffleArr=arr=>{const r=[...arr];for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;};
   accaDefs.forEach((acca,ai)=>{
     const seenInAcca=new Set();
-    // Filtro principal — exclui também picks já usados em accas anteriores (dedup global)
-    const strict=pool.filter(p=>{
+    // Pool alargado de candidatos (3× o necessário) para ter variedade ao shuffle
+    let candidates=pool.filter(p=>{
       if(!acca.filter(p))return false;
       const key=`${p.home}|${p.away}|${p.bet}`;
       if(usedConservative.has(key))return false;
       return true;
-    }).sort(acca.sort||((a,b)=>composite(b)-composite(a))).filter(p=>{
+    }).sort(acca.sort||((a,b)=>composite(b)-composite(a)));
+    const wideTop=candidates.slice(0,acca.legs*3);
+    // Quando regenerar, shuffle do pool de candidatos antes de aplicar dedup
+    const ordered=_multRegen?shuffleArr(wideTop):wideTop;
+    const strict=ordered.filter(p=>{
       const k=`${p.home}|${p.away}`;if(seenInAcca.has(k))return false;seenInAcca.add(k);return true;
     });
     let picks=strict.slice(0,acca.legs);
@@ -5358,14 +5369,16 @@ function generateMultiples(){
     // Fallback: se não há picks suficientes, relaxar filtro de confiança e EV
     if(picks.length<acca.legs){
       const seenFallback=new Set();
-      const relaxed=pool.filter(p=>{
+      let relaxed=pool.filter(p=>{
         const key=`${p.home}|${p.away}|${p.bet}`;
-        if(usedConservative.has(key))return false; // respeita dedup global no fallback também
+        if(usedConservative.has(key))return false;
         if(p.marketType==='combo')return false;
         const baseType=acca.filter.toString().includes('h2h')?
           (p.marketType==='h2h'||p.marketType==='btts'||p.marketType==='dc'):true;
         return baseType&&p.odd>=1.30&&p.odd<2.50;
-      }).sort(acca.sort||((a,b)=>composite(b)-composite(a))).filter(p=>{
+      }).sort(acca.sort||((a,b)=>composite(b)-composite(a)));
+      if(_multRegen)relaxed=shuffleArr(relaxed.slice(0,acca.legs*3));
+      relaxed=relaxed.filter(p=>{
         const k=`${p.home}|${p.away}`;if(seenFallback.has(k)||strict.some(s=>`${s.home}|${s.away}`===k))return false;
         seenFallback.add(k);return true;
       });
@@ -5377,6 +5390,9 @@ function generateMultiples(){
     picks.forEach(p=>usedConservative.add(`${p.home}|${p.away}|${p.bet}`));
     render3.push(buildCard(acca,picks,ai%3,hasPartial));
   });
+
+  // Reset flag depois de gerar — próxima chamada não-regenerate volta a usar ordem determinística
+  _multRegen=false;
 
   // EXPERIMENTAL multiples → render4 (test tab) — permissive filters for data collection
   // Uses full pool (not poolUniq) so DC+ combos are included
