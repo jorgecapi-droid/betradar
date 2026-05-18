@@ -2305,14 +2305,14 @@ function calcConfidence(pick, hf=[], af=[], hs=null, as_=null){
   if(pick.marketType==='combo')score-=2; // combos têm risco acumulado
   if(pick.marketType==='ht') score-=1;  // HT é menos previsível
 
-  // Cap baseado em EV: por melhor que seja a previsão, se a odd não tem value,
-  // a confiança não pode ser máxima. Mantém coerência entre EV (valor) e
-  // confidence (qualidade do dataset que suporta a previsão).
+  // Cap baseado em EV: usa evDc (Dixon-Coles, team-based) quando disponível,
+  // fallback para ev simples. evDc é o sinal mais robusto.
   const finalScore=Math.min(10,Math.max(1,score));
+  const effEv=(pick.evDc!=null?pick.evDc:(pick.ev||0));
   let cap=10;
-  if(pick.ev<-15)cap=2;
-  else if(pick.ev<-8)cap=4;
-  else if(pick.ev<-3)cap=6;
+  if(effEv<-15)cap=2;
+  else if(effEv<-8)cap=4;
+  else if(effEv<-3)cap=6;
   return Math.min(finalScore,cap);
 }
 
