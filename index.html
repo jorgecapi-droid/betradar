@@ -5304,7 +5304,16 @@ function generateMultiples(){
     const evClass=combEV>0?'value-pos':'value-neg';
     const accaId=`acca-${acca.id}`;
     const todayDate=new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'});
-    const addedA=loadHistory().some(h=>h.match===`Múltipla: ${acca.title}`&&(h.date===todayDate||h.date==='Hoje'));
+    // Assinatura das picks actuais — usada para detectar se uma entrada do histórico
+    // corresponde EXACTAMENTE aos jogos que esta acca está a mostrar. Permite que,
+    // após Gerar Novamente, o botão volte a dizer "Adicionar" porque os jogos mudaram.
+    const currentLegsKey=picks.map(p=>`${p.home}|${p.away}|${p.bet}`).sort().join('||');
+    const addedA=loadHistory().some(h=>{
+      if(h.match!==`Múltipla: ${acca.title}`)return false;
+      if(h.date!==todayDate&&h.date!=='Hoje')return false;
+      const histLegsKey=(h.legs||[]).map(l=>`${l.home}|${l.away}|${l.bet}`).sort().join('||');
+      return histLegsKey===currentLegsKey;
+    });
     // Store legs in a global map to avoid JSON escaping issues in onclick
     if(!window._accaLegs)window._accaLegs={};
     window._accaLegs[accaId]=picks.map((p,i)=>({n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,betDisplay:`${p.bet} · ${p.league}`,odd:`@${p.odd.toFixed(2)}`,oddVal:p.odd,date:p.date,league:p.league,result:'pending'}));
@@ -5396,9 +5405,6 @@ function generateMultiples(){
     render3.push(buildCard(acca,picks,ai%3,hasPartial,wasRegenerated));
   });
 
-  // Reset flag depois de gerar — próxima chamada não-regenerate volta a usar ordem determinística
-  _multRegen=false;
-
   // EXPERIMENTAL multiples → render4 (test tab) — permissive filters for data collection
   // Uses full pool (not poolUniq) so DC+ combos are included
   const experimentalDefs=[
@@ -5441,7 +5447,9 @@ function generateMultiples(){
   ];
   experimentalDefs.forEach((acca,ai)=>{
     // Dedup per-acca: max 1 pick per game within this acca
-    const filtered=pool.filter(acca.filter).sort((a,b)=>composite(b)-composite(a));
+    let filtered=pool.filter(acca.filter).sort((a,b)=>composite(b)-composite(a));
+    // Quando regen, shuffle do top 3× para gerar combinações diferentes
+    if(_multRegen)filtered=shuffleArr(filtered.slice(0,acca.legs*3));
     const seenInAcca=new Set();
     const bestPerGame=filtered.filter(p=>{
       const k=`${p.home}|${p.away}`;
@@ -5449,7 +5457,7 @@ function generateMultiples(){
       seenInAcca.add(k);return true;
     });
     const picks=bestPerGame.slice(0,acca.legs);
-    render4.push(buildCard(acca,picks,ai%3));
+    render4.push(buildCard(acca,picks,ai%3,false,wasRegenerated));
   });
 
   // Special accas tab
@@ -5493,7 +5501,9 @@ function generateMultiples(){
   ];
   specialDefs.forEach((acca,ai)=>{
     // Filter, sort by composite (best first), then deduplicate by game
-    const sorted=pool.filter(acca.filter).sort((a,b)=>composite(b)-composite(a));
+    let sorted=pool.filter(acca.filter).sort((a,b)=>composite(b)-composite(a));
+    // Quando regen, shuffle do top 3× para gerar combinações diferentes
+    if(_multRegen)sorted=shuffleArr(sorted.slice(0,acca.legs*3));
     const seenSpec=new Set();
     const picks=sorted.filter(p=>{
       const k=`${p.home}|${p.away}`;
@@ -5501,11 +5511,15 @@ function generateMultiples(){
       seenSpec.add(k);return true;
     }).slice(0,acca.legs);
     if(picks.length<acca.legs){
-      render5.push(buildCard(acca,[],ai%3));
+      render5.push(buildCard(acca,[],ai%3,false,wasRegenerated));
     } else {
-      render5.push(buildCard(acca,picks,ai%3));
+      render5.push(buildCard(acca,picks,ai%3,false,wasRegenerated));
     }
   });
+
+  // Reset flag depois de TODOS os loops processarem — assim conservadoras, experimentais e especiais
+  // partilham o mesmo evento de regen quando o utilizador clica em "Gerar Novamente"
+  _multRegen=false;
 
   document.getElementById('multiples-list-3').innerHTML=render3.join('');
   document.getElementById('multiples-list-4').innerHTML=render4.join('');
