@@ -2461,7 +2461,8 @@ async function checkPendingResults(){
   // Deduplicate by match — only check each game once
   const seen=new Set();
   const pending=history.filter(b=>{
-    if(b.result!=='pending')return false;
+    const needsLegRefresh=b.bet==='Acumulador'&&b.legs?.some(l=>!l.result||l.result==='pending');
+    if(b.result!=='pending'&&!needsLegRefresh)return false;
     // Skip future bets — can't have results yet
     if(b.addedAt){
       const betTime=new Date(b.addedAt).getTime();
@@ -2555,9 +2556,10 @@ async function checkPendingResults(){
     if(/^Over [\d.]+$/.test(b)){const line=parseFloat(b.match(/[\d.]+/)[0]);return total>line;}
     if(/^Under [\d.]+$/.test(b)){const line=parseFloat(b.match(/[\d.]+/)[0]);return total<line;}
 
-    // BTTS
-    if(b==='Ambas Marcam ✓'||b==='Ambas Marcam'||b==='BTTS ✓')return gh>0&&ga>0;
-    if(b==='Não Ambas Marcam'||b==='BTTS ✗')return!(gh>0&&ga>0);
+    // BTTS — aceita variações antigas/novas guardadas no histórico
+    const bNorm=b.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if((bNorm.includes('ambas marcam')||bNorm.includes('btts'))&&!bNorm.includes('nao')&&!bNorm.includes('no')&&!/[x✗✘]/i.test(b))return gh>0&&ga>0;
+    if(bNorm.includes('nao ambas marcam')||bNorm.includes('no btts')||bNorm.includes('btts no')||/ambas marcam\s*[x✗✘]/i.test(b)||/btts\s*[x✗✘]/i.test(b))return!(gh>0&&ga>0);
 
     // DC
     if(b==='Dupla Chance 1X'||b==='1X')return gh>=ga;
@@ -2673,9 +2675,16 @@ async function checkPendingResults(){
           await new Promise(r=>setTimeout(r,250));
         }
         bet.legs.forEach(l=>{if(l.result==='lost')anyLost=true;if(l.result==='pending'||!l.result)allDone=false;});
-        if(anyLost){updateBet(bet.id,'lost',true);updated++;}
-        else if(allDone){updateBet(bet.id,'won',true);updated++;}
-        else{const h=loadHistory();const idx=h.findIndex(x=>x.id===bet.id);if(idx>=0){h[idx].legs=bet.legs;saveHistory(h);}}
+        const saveMultipleLegs=()=>{const h=loadHistory();const idx=h.findIndex(x=>x.id===bet.id);if(idx>=0){h[idx].legs=bet.legs;saveHistory(h);}};
+        saveMultipleLegs();
+        if(anyLost){
+          if(bet.result!=='lost'){updateBet(bet.id,'lost',true);updated++;}
+          else{renderHistory();}
+        }
+        else if(allDone){
+          if(bet.result!=='won'){updateBet(bet.id,'won',true);updated++;}
+          else{renderHistory();}
+        }
         continue;
       }
 
