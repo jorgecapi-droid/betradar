@@ -1913,6 +1913,7 @@ function clearPersistentCache(){
 const _loadPersistentCacheLater=true;
 
 let allGames=[],currentSport='all',currentRange='all',currentSort='score',currentMarket='all',formCache={},teamStatsCache={},h2hCache={},injuryCache={},standingsCache={},historyFilter='all';
+let coveragePrefetchDone=false;
 const cornersCache={};
 const advancedStatsCache={}; // declarado aqui para loadPersistentCache poder aceder
 // Now load persistent analysis cache into the declared objects
@@ -6393,9 +6394,14 @@ async function loadGames(forceRefresh=false){
   });
   const withDataCount=todayGamesUnique.filter(p=>hasFullData(p)).length;
   const cacheCoverage=todayGamesUnique.length>0?withDataCount/todayGamesUnique.length:1;
-  if(forceRefresh||(!workerLoaded&&cacheCoverage<0.3)){
+  // O Worker pode responder com análise pronta mas ainda parcial para algumas ligas.
+  // Nesses casos completamos localmente só os jogos do betting-day em vez de ficar preso
+  // em estados como "26/34 jogos com dados".
+  if(forceRefresh||cacheCoverage<0.8||(!workerLoaded&&cacheCoverage<0.95)){
+    coveragePrefetchDone=false;
     console.log(`Prefetch dispatch: force=${forceRefresh}, workerOK=${workerLoaded}, coverage=${(cacheCoverage*100).toFixed(0)}%`);
-    setTimeout(()=>prefetchAllGames(allPicks),3000);
+    const prefetchPool=todayGamesUnique.length?todayGamesUnique:allPicks;
+    setTimeout(()=>prefetchAllGames(prefetchPool),3000);
     setTimeout(()=>prefetchRecentResults(),10000);
   }
   // Carregar amanhã automaticamente — necessário para jogos pós-meia-noite Lisboa
@@ -6444,8 +6450,8 @@ async function prefetchAllGames(picks){
         try{
           // Form (essencial)
           const formTasks=[];
-          if(!formCache[pick.home])formTasks.push(fetchTeamForm(pick.home,pick.leagueId));
-          if(!formCache[pick.away])formTasks.push(fetchTeamForm(pick.away,pick.leagueId));
+          if(!(formCache[pick.home]&&formCache[pick.home].length>0))formTasks.push(fetchTeamForm(pick.home,pick.leagueId));
+          if(!(formCache[pick.away]&&formCache[pick.away].length>0))formTasks.push(fetchTeamForm(pick.away,pick.leagueId));
           if(formTasks.length)await Promise.all(formTasks);
 
           const hTid=getTid(pick.home),aTid=getTid(pick.away);
@@ -6483,6 +6489,7 @@ async function prefetchAllGames(picks){
   } finally {
     // GARANTIR cleanup mesmo se houver erro fatal
     _isPrefetching=false;
+    coveragePrefetchDone=true;
     updateCounter(true); // estado final
   }
 
@@ -6994,7 +7001,7 @@ function renderTop15(){
   }
   const totalSoccer=todaySoccer.length;
   const withData=todaySoccer.filter(p=>hasFullData(p)).length;
-  const prefetchDone=totalSoccer>0&&withData>=totalSoccer*0.8;
+  const prefetchDone=totalSoccer>0&&(withData>=totalSoccer*0.8||coveragePrefetchDone);
   const progressBar=totalSoccer>0&&!prefetchDone?`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(0,229,160,.06);border:1px solid rgba(0,229,160,.15);border-radius:10px;margin-bottom:12px;font-size:11px;color:var(--text2);">
     <div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;">
       <div style="height:100%;width:${Math.round(withData/totalSoccer*100)}%;background:var(--accent);border-radius:2px;transition:width .4s;"></div>
