@@ -2359,8 +2359,67 @@ function fmtDateTime(iso){
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────
-function loadHistory(){try{return JSON.parse(localStorage.getItem('betradar_v2')||'[]');}catch{return[];}}
-function saveHistory(h){localStorage.setItem('betradar_v2',JSON.stringify(h));}
+function repairMojibakeText(value){
+  if(value==null)return value;
+  const s=String(value);
+  if(!/[ÃÂâð]/.test(s))return s;
+  let fixed=s;
+  try{
+    const bytes=new Uint8Array([...s].map(ch=>ch.charCodeAt(0)&255));
+    const decoded=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+    const badBefore=(s.match(/[ÃÂâð]/g)||[]).length;
+    const badAfter=(decoded.match(/[ÃÂâð]/g)||[]).length;
+    const replacementChars=(decoded.match(/\uFFFD/g)||[]).length;
+    if(decoded&&badAfter<badBefore&&replacementChars<=1)fixed=decoded;
+  }catch(e){}
+  return fixed
+    .replace(/VitÃ³ria/g,'Vitória')
+    .replace(/NÃ£o/g,'Não')
+    .replace(/MÃºltipla/g,'Múltipla')
+    .replace(/MÃºltiplas/g,'Múltiplas')
+    .replace(/HistÃ³rico/g,'Histórico')
+    .replace(/AmanhÃ£/g,'Amanhã')
+    .replace(/SeleÃ§Ãµes/g,'Seleções')
+    .replace(/ConfianÃ§a/g,'Confiança')
+    .replace(/RecomendaÃ§Ã£o/g,'Recomendação')
+    .replace(/â‚¬/g,'€')
+    .replace(/â€“|â€”/g,'—')
+    .replace(/â†’/g,'→')
+    .replace(/âœ…/g,'✅')
+    .replace(/âŒ/g,'❌')
+    .replace(/âš ï¸|âš ï¸/g,'⚠️')
+    .replace(/ðŸ¥‡/g,'🥇')
+    .replace(/ðŸ¥ˆ/g,'🥈')
+    .replace(/ðŸ¥‰/g,'🥉')
+    .replace(/ðŸ†/g,'🏆')
+    .replace(/ðŸŽ°/g,'🎰')
+    .replace(/ðŸ¤–/g,'🤖')
+    .replace(/ðŸ’Ž/g,'💎')
+    .replace(/ðŸ’¡/g,'💡')
+    .replace(/ðŸ›¡/g,'🛡️')
+    .replace(/ðŸ§ª/g,'🧪');
+}
+function repairHistoryBet(b){
+  if(!b||typeof b!=='object')return b;
+  const out={...b};
+  ['match','bet','league','date','time','source','category'].forEach(k=>{
+    if(out[k]!=null)out[k]=repairMojibakeText(out[k]);
+  });
+  if(Array.isArray(out.legs)){
+    out.legs=out.legs.map(l=>{
+      if(!l||typeof l!=='object')return l;
+      const leg={...l};
+      ['teams','bet','betDisplay','league','score','date','time','result'].forEach(k=>{
+        if(leg[k]!=null)leg[k]=repairMojibakeText(leg[k]);
+      });
+      return leg;
+    });
+  }
+  return out;
+}
+function repairHistory(h){return Array.isArray(h)?h.map(repairHistoryBet):[];}
+function loadHistory(){try{return repairHistory(JSON.parse(localStorage.getItem('betradar_v2')||'[]'));}catch{return[];}}
+function saveHistory(h){localStorage.setItem('betradar_v2',JSON.stringify(repairHistory(h)));}
 function addBet(bet){const h=loadHistory();h.unshift(bet);saveHistory(h);updateBankrollFromBets();renderHistory();}
 function updateBet(id,result,auto=false){
   const h=loadHistory(),b=h.find(x=>x.id===id);if(!b)return;
@@ -5837,7 +5896,7 @@ function renderHistory(){
     const rbtns=b.result==='pending'
       ?`<button class="rbtn win" onclick="updateBet('${b.id}','won')">✅ Ganhou</button><button class="rbtn loss" onclick="updateBet('${b.id}','lost')">❌ Perdeu</button>`
       :`<span class="status-pill ${b.result}">${b.result==='won'?'✅ Ganhou':'❌ Perdeu'}</span>${autoTag}<button class="rbtn edit" onclick="editBetResult('${b.id}')" title="Corrigir">✏️</button>`;
-    const isMultiple=b.league==='Múltipla'&&b.legs&&b.legs.length>0;
+    const isMultiple=Array.isArray(b.legs)&&b.legs.length>0;
     const legsPanel=isMultiple?`<div class="bet-legs-panel" id="legs-${b.id}">${b.legs.map(l=>{
       const lr=l.result||'pending';
       const lIcon=lr==='won'?'✅':lr==='lost'?'❌':'⏳';
