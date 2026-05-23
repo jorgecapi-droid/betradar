@@ -5332,7 +5332,105 @@ function addToBetslip(index,home,away,bet,odd,league,time,date,source='picks'){
 // candidatos para que cada clique produza combinações diferentes (mantendo qualidade).
 let _multRegen=false;
 function regenerateMultiples(){_multRegen=true;generateMultiples();}
-function generateMultiples(){
+async function generateMultiples(){
+  const wasRegenerated=!!_multRegen;
+  try{
+    const variant=wasRegenerated?Date.now():0;
+    const endpoint=`${WORKER_URL}/multiples${wasRegenerated?`?regen=1&variant=${variant}`:''}`;
+    const res=await fetch(endpoint,{cache:'no-store'});
+    if(res.ok){
+      const data=await res.json();
+      if(data?.status==='ok'&&data?.groups){
+        renderWorkerMultiples(data,wasRegenerated);
+        _multRegen=false;
+        return;
+      }
+    }
+  }catch(e){
+    console.warn('Worker multiples fallback:',e.message);
+  }
+
+  if(allGames.length===0){
+    ['3','4','5'].forEach(n=>document.getElementById(`multiples-list-${n}`).innerHTML='<div class="empty-state"><div class="ei">🎰</div><p>Carrega primeiro os picks do dia.</p></div>');
+    return;
+  }
+
+  generateMultiplesLocal();
+}
+
+function renderWorkerMultiples(data,wasRegenerated=false){
+  const sub=document.getElementById('multiples-subtitle');
+  if(sub)sub.textContent=`${data.poolSize||0} jogos qualificados hoje · Múltiplas estáveis geradas pelo worker`;
+  const renderGroup=(group,key)=>((data.groups?.[key]||[]).map((card,i)=>renderWorkerAccaCard(card,group,i,wasRegenerated||data.variant>0)).join(''));
+  document.getElementById('multiples-list-3').innerHTML=renderGroup('conservative','conservative');
+  document.getElementById('multiples-list-4').innerHTML=renderGroup('experimental','experimental');
+  document.getElementById('multiples-list-5').innerHTML=renderGroup('special','special');
+}
+
+function renderWorkerAccaCard(acca,groupKey,delay,wasRegenerated=false){
+  const picks=acca.picks||[];
+  if(!acca.complete||picks.length<acca.legs){
+    return`<div class="acca-card" style="animation-delay:${delay*0.1}s"><div class="acca-header"><div class="acca-title ${acca.titleClass||'green'}">${acca.title}</div></div><div style="padding:16px;color:var(--muted);font-size:12px;">Não há picks suficientes de hoje com dados completos para esta combinação.</div></div>`;
+  }
+
+  const accaId=`acca-${acca.id}`;
+  const totalOdd=Number(acca.totalOdd||picks.reduce((t,p)=>t*(p.odd||1),1));
+  const combProb=Number(acca.combProb||0);
+  const combEV=Math.round(Number(acca.combEV||0));
+  const avgConf=Math.round(Number(acca.avgConf||0));
+  const evClass=combEV>0?'value-pos':'value-neg';
+  const todayDate=new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'});
+  const currentLegsKey=picks.map(p=>`${p.home}|${p.away}|${p.bet}`).sort().join('||');
+  const addedA=loadHistory().some(h=>{
+    if(h.match!==`Múltipla: ${acca.title}`)return false;
+    if(h.date!==todayDate&&h.date!=='Hoje')return false;
+    const histLegsKey=(h.legs||[]).map(l=>`${l.home}|${l.away}|${l.bet}`).sort().join('||');
+    return histLegsKey===currentLegsKey;
+  });
+
+  if(!window._accaLegs)window._accaLegs={};
+  window._accaLegs[accaId]=picks.map((p,i)=>({
+    n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,
+    betDisplay:`${p.bet} · ${p.league}`,odd:`@${Number(p.odd||1).toFixed(2)}`,
+    oddVal:Number(p.odd||1),date:p.date,league:p.league,result:'pending',
+    fixtureId:p.fixtureId||null,marketType:p.marketType||null
+  }));
+  if(!window._accaMeta)window._accaMeta={};
+  window._accaMeta[accaId]={regenerated:wasRegenerated,worker:true};
+
+  const regenBadge=wasRegenerated?'<span style="font-size:9px;color:var(--muted);background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.2);border-radius:4px;padding:1px 5px;margin-left:6px;" title="Múltipla gerada após clique em ↻ Gerar Novamente">↻ regen</span>':'';
+  const workerBadge='<span style="font-size:9px;color:var(--green);background:rgba(0,229,168,.08);border:1px solid rgba(0,229,168,.18);border-radius:4px;padding:1px 5px;margin-left:6px;">worker</span>';
+  return`<div class="acca-card" style="animation-delay:${delay*0.1}s">
+    <div class="acca-header">
+      <div class="acca-title ${acca.titleClass||'green'}">${acca.title}${workerBadge}${regenBadge}</div>
+      <div class="acca-meta">
+        <div class="acca-legs-count">${acca.legs} sel.</div>
+        <div class="acca-odd">@${totalOdd.toFixed(2)}</div>
+        <div class="acca-prob">~${combProb.toFixed(1)}%</div>
+        <div class="acca-ev ${evClass}">${combEV>0?`▲ EV +${combEV}%`:`▼ EV ${combEV}%`}</div>
+        <div class="acca-legs-count" style="color:${confColor(avgConf)}">⭐ ${avgConf}/10</div>
+      </div>
+    </div>
+    <div class="acca-reasoning">${acca.desc||''} Odd total: <strong>@${totalOdd.toFixed(2)}</strong> · Prob.: <strong>${combProb.toFixed(1)}%</strong> · Confiança: <strong>${avgConf}/10</strong></div>
+    ${picks.map((p,i)=>{
+      const dH=(p.home||'').length>26?p.home.slice(0,24)+'…':p.home;
+      const dA=(p.away||'').length>26?p.away.slice(0,24)+'…':p.away;
+      return`<div class="acca-leg"><div class="leg-num">${i+1}</div><div class="leg-match"><div class="leg-teams">${dH} vs ${dA}</div><div class="leg-bet">${p.bet} · ${p.league} · ${p.date||''} ${p.time||''} · ⭐ ${p.confidence||0}/10</div></div><div class="leg-odd">@${Number(p.odd||1).toFixed(2)}</div></div>`;
+    }).join('')}
+    <div class="acca-footer">
+      <div class="acca-stake-row">
+        <span class="acca-stake-label">Valor (€):</span>
+        <input class="acca-stake-input" type="number" id="${accaId}-stake" value="10" min="0.5" step="0.5" oninput="updateAccaReturn('${accaId}',${totalOdd})">
+        <span class="acca-return" id="${accaId}-return">→ ${(10*totalOdd).toFixed(2)}€</span>
+      </div>
+      <button class="add-acca-btn ${addedA?'added':''}" id="${accaId}-btn" onclick="addAccaToHistory('${accaId}','${esc(acca.title)}',${totalOdd})">
+        ${addedA?'✓ Adicionada':'+ Adicionar ao Histórico'}
+      </button>
+    </div>
+  </div>`;
+}
+
+function generateMultiplesLocal(){
   if(allGames.length===0){
     ['3','4','5'].forEach(n=>document.getElementById(`multiples-list-${n}`).innerHTML='<div class="empty-state"><div class="ei">🎰</div><p>Carrega primeiro os picks do dia.</p></div>');
     return;
