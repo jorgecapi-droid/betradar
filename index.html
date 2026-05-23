@@ -1592,7 +1592,7 @@ async function prefetchRecentResults(){
   const season=now.getMonth()<7?now.getFullYear()-1:now.getFullYear();
   const headers={'x-apisports-key':getFormKey()};
   const history=loadHistory();
-  const pending=history.filter(b=>b.result==='pending');
+  const pending=history.filter(needsResultCheck);
   if(pending.length===0)return;
   const resultEl=document.getElementById('check-result');
 
@@ -2421,6 +2421,12 @@ function repairHistoryBet(b){
 function repairHistory(h){return Array.isArray(h)?h.map(repairHistoryBet):[];}
 function loadHistory(){try{return repairHistory(JSON.parse(localStorage.getItem('betradar_v2')||'[]'));}catch{return[];}}
 function saveHistory(h){localStorage.setItem('betradar_v2',JSON.stringify(repairHistory(h)));}
+function hasPendingLegs(b){
+  return b?.bet==='Acumulador'&&Array.isArray(b.legs)&&b.legs.some(l=>!l.result||l.result==='pending');
+}
+function needsResultCheck(b){
+  return b?.result==='pending'||hasPendingLegs(b);
+}
 function addBet(bet){const h=loadHistory();h.unshift(bet);saveHistory(h);updateBankrollFromBets();renderHistory();}
 function updateBet(id,result,auto=false){
   const h=loadHistory(),b=h.find(x=>x.id===id);if(!b)return;
@@ -2534,8 +2540,7 @@ async function checkPendingResults(){
   // Deduplicate by match — only check each game once
   const seen=new Set();
   const pending=history.filter(b=>{
-    const needsLegRefresh=b.bet==='Acumulador'&&b.legs?.some(l=>!l.result||l.result==='pending');
-    if(b.result!=='pending'&&!needsLegRefresh)return false;
+    if(!needsResultCheck(b))return false;
     // Skip future bets — can't have results yet
     if(b.addedAt){
       const betTime=new Date(b.addedAt).getTime();
@@ -2914,7 +2919,7 @@ async function checkPendingResults(){
     let html='';
     if(updated>0&&remaining===0)html=`✅ ${updated} resultado(s) atualizados — todas verificadas`;
     else if(updated>0)html=`✅ ${updated} atualizado(s) · ${remaining} ainda pendentes`;
-    else html=`⚠️ Sem resultados finais para ${pending.length} aposta(s) pendente(s)`;
+    else html=`⚠️ Sem resultados finais para ${pending.length} aposta(s) por verificar`;
     // Show up to 5 unresolved bets with reasons
     if(unresolved.length>0){
       const sample=unresolved.slice(0,5).map(u=>`<div style="font-size:10px;color:var(--muted);margin-top:3px;">• ${u.match.slice(0,32)} (${u.reason})</div>`).join('');
@@ -5829,7 +5834,7 @@ function renderHistory(){
   }
   const bets=loadHistory();
   const won=bets.filter(b=>b.result==='won').length,lost=bets.filter(b=>b.result==='lost').length;
-  const pending=bets.filter(b=>b.result==='pending').length;
+  const pending=bets.filter(needsResultCheck).length;
   const staked=bets.reduce((s,b)=>s+b.stake,0);
   const profit=bets.filter(b=>b.result!=='pending').reduce((s,b)=>s+b.profit,0);
   const roi=staked>0?((profit/staked)*100):0;
@@ -5872,7 +5877,9 @@ function renderHistory(){
   renderProfitChart(bets);
   renderDetailedStats(bets);
   renderMarketAcerto(bets);
-  let filtered=bets;if(historyFilter!=='all')filtered=bets.filter(b=>b.result===historyFilter);
+  let filtered=bets;
+  if(historyFilter==='pending')filtered=bets.filter(needsResultCheck);
+  else if(historyFilter!=='all')filtered=bets.filter(b=>b.result===historyFilter);
   const list=document.getElementById('bet-history-list');
   if(filtered.length===0){
     list.innerHTML=`<div class="empty-state"><div class="ei">${bets.length===0?'📋':'🔍'}</div><p>${bets.length===0?'Ainda não adicionaste nenhuma aposta.<br>Vai aos <strong>Picks</strong> ou <strong>Múltiplas</strong>.':'Sem apostas neste filtro.'}</p></div>`;
@@ -5953,6 +5960,7 @@ function renderHistory(){
             const clvArrow=c.clvPct>0?'▲':c.clvPct<0?'▼':'·';
             out.push(` · <span style="font-size:9px;color:${clvColor};font-family:'DM Mono',monospace;font-weight:600;" title="Close Value Line: odd abertura ${c.oddAtPick?.toFixed(2)} → fecho ${c.oddClose?.toFixed(2)}">CLV ${clvArrow}${c.clvPct>0?'+':''}${c.clvPct}%</span>`);
           }
+          if(hasPendingLegs(b))out.push(` · <span style="font-size:9px;color:var(--gold);font-family:'DM Mono',monospace;">pernas pendentes</span>`);
           return out.join('');
         })()}</div>
         ${expandBtn}${legsPanel}
@@ -8447,7 +8455,7 @@ function updateBNBadges(){
   const todayCount=allGames.filter(g=>new Date(g.commence).toDateString()===new Date().toDateString()&&!g.isFriendly&&g.marketType!=='combo').length;
   const el=document.getElementById('bnn-picks');
   if(el)el.textContent=todayCount>0?todayCount:'';
-  const pending=loadHistory().filter(b=>b.result==='pending').length;
+  const pending=loadHistory().filter(needsResultCheck).length;
   const hel=document.getElementById('bnn-history');
   if(hel)hel.textContent=pending>0?pending:'';
 }
