@@ -5761,7 +5761,7 @@ function addAccaToHistory(id,title,odd){
   // Save both the specific source and generic category for backwards compatibility
   let category='multiples_conservative';
   if(multipleId.startsWith('exp_'))category='multiples_test';
-  else if(['ligapt','overgoals','btts3','bttsno3','dc3','combo3','combo1x_over','combo_x2_over','h2h_safe3','h2h_value3','topconf5','value5'].includes(multipleId))category='multiples_special';
+  else if(['ligapt','overgoals','btts3','bttsno3','dc3','combo3','combo1x_over','combo_x2_over','h2h_safe3','h2h_value3','fallback_europe3','fallback_best3','fallback_value4','fallback_balanced5','topconf5','value5'].includes(multipleId))category='multiples_special';
   const source=`multiple_${multipleId}`;
   addBet({id:Date.now().toString(),match:`Múltipla: ${title}`,bet:'Acumulador',odd,stake,league:'Múltipla',time:'—',date:new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,legs,source,category,regenerated:!!meta.regenerated});
   const btn=document.getElementById(`${id}-btn`);
@@ -5790,6 +5790,8 @@ const SRC_LABELS={
   'multiple_bttsno3':'🥅 Tripla BTTS Não','multiple_dc3':'🛡 Tripla DC','multiple_combo3':'🔗 Tripla DC+',
   'multiple_combo1x_over':'🔗 Tripla 1X+Over','multiple_combo_x2_over':'🔗 Tripla X2+Over',
   'multiple_h2h_safe3':'⚽ Tripla 1X2 Segura','multiple_h2h_value3':'💎 Tripla 1X2 Valor',
+  'multiple_fallback_europe3':'🌍 Tripla Europa Fallback','multiple_fallback_best3':'🎯 Tripla Melhores Dia',
+  'multiple_fallback_value4':'💎 Quádrupla Valor Fallback','multiple_fallback_balanced5':'⚖️ Quíntupla Balanceada Fallback',
   'multiple_topconf5':'⭐ Quíntupla Alta Conf','multiple_value5':'💡 Quíntupla Valor',
   'picks':'📋 Picks Normais'
 };
