@@ -2451,6 +2451,20 @@ function needsResultCheck(b){
 function addBet(bet){const h=loadHistory();h.unshift(bet);saveHistory(h);updateBankrollFromBets();renderHistory();}
 function updateBet(id,result,auto=false){
   const h=loadHistory(),b=h.find(x=>x.id===id);if(!b)return;
+  if(b.bet==='Acumulador'&&Array.isArray(b.legs)){
+    if(result==='won'){
+      b.legs=b.legs.map(l=>({...l,result:'won'}));
+    }else if(result==='lost'&&!b.legs.some(l=>l?.result==='lost')){
+      let marked=false;
+      b.legs=b.legs.map(l=>{
+        if(!marked&&(!l.result||l.result==='pending')){marked=true;return{...l,result:'lost'};}
+        return l;
+      });
+      if(!marked&&b.legs.length>0)b.legs[0]={...b.legs[0],result:'lost'};
+    }else if(result==='pending'){
+      b.legs=b.legs.map(l=>({...l,result:'pending'}));
+    }
+  }
   b.result=result;b.auto=auto;
   b.profit=result==='won'?parseFloat(((b.odd-1)*b.stake).toFixed(2)):-parseFloat(b.stake.toFixed(2));
   saveHistory(h);updateBankrollFromBets();renderHistory();
@@ -2482,6 +2496,9 @@ function updateBetPending(id){
   const h=loadHistory();
   const b=h.find(x=>x.id===id);
   if(!b)return;
+  if(b.bet==='Acumulador'&&Array.isArray(b.legs)){
+    b.legs=b.legs.map(l=>({...l,result:'pending'}));
+  }
   b.result='pending';b.profit=0;b.auto=false;
   saveHistory(h);updateBankrollFromBets();renderHistory();
 }
