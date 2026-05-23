@@ -2400,6 +2400,27 @@ function repairMojibakeText(value){
     .replace(/ðŸ›¡/g,'🛡️')
     .replace(/ðŸ§ª/g,'🧪');
 }
+function derivedMultipleResult(b){
+  if(!b||b.bet!=='Acumulador'||!Array.isArray(b.legs)||b.legs.length===0)return null;
+  const results=b.legs.map(l=>l?.result||'pending');
+  if(results.includes('lost'))return 'lost';
+  if(results.every(r=>r==='won'))return 'won';
+  return 'pending';
+}
+function profitForResult(b,result){
+  const stake=Number(b?.stake)||0;
+  const odd=Number(b?.odd)||0;
+  if(result==='won')return parseFloat(((odd-1)*stake).toFixed(2));
+  if(result==='lost')return -parseFloat(stake.toFixed(2));
+  return 0;
+}
+function applyDerivedMultipleState(b){
+  const derived=derivedMultipleResult(b);
+  if(!derived)return b;
+  b.result=derived;
+  b.profit=profitForResult(b,derived);
+  return b;
+}
 function repairHistoryBet(b){
   if(!b||typeof b!=='object')return b;
   const out={...b};
@@ -2416,16 +2437,16 @@ function repairHistoryBet(b){
       return leg;
     });
   }
-  return out;
+  return applyDerivedMultipleState(out);
 }
 function repairHistory(h){return Array.isArray(h)?h.map(repairHistoryBet):[];}
 function loadHistory(){try{return repairHistory(JSON.parse(localStorage.getItem('betradar_v2')||'[]'));}catch{return[];}}
 function saveHistory(h){localStorage.setItem('betradar_v2',JSON.stringify(repairHistory(h)));}
 function hasPendingLegs(b){
-  return b?.bet==='Acumulador'&&Array.isArray(b.legs)&&b.legs.some(l=>!l.result||l.result==='pending');
+  return b?.bet==='Acumulador'&&b?.result==='pending'&&Array.isArray(b.legs)&&b.legs.some(l=>!l.result||l.result==='pending');
 }
 function needsResultCheck(b){
-  return b?.result==='pending'||hasPendingLegs(b);
+  return b?.result==='pending'||derivedMultipleResult(b)==='pending';
 }
 function addBet(bet){const h=loadHistory();h.unshift(bet);saveHistory(h);updateBankrollFromBets();renderHistory();}
 function updateBet(id,result,auto=false){
