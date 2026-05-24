@@ -1024,6 +1024,9 @@
     <div style="font-size:13px;font-weight:700;color:var(--text);margin:16px 0 6px;display:flex;align-items:center;justify-content:space-between;">🥅 Top 10 — BTTS <button onclick="addAllTop('top-btts-list','top10_btts')" style="font-size:10px;padding:3px 8px;background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.25);color:var(--accent);border-radius:6px;cursor:pointer;">➕ Todas</button></div>
     <div id="top-btts-list"></div>
 
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin:16px 0 6px;display:flex;align-items:center;justify-content:space-between;">🛡 Top 10 — DC <button onclick="addAllTop('top-dc-list','top10_dc')" style="font-size:10px;padding:3px 8px;background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.25);color:var(--accent);border-radius:6px;cursor:pointer;">➕ Todas</button></div>
+    <div id="top-dc-list"></div>
+
     <div style="font-size:13px;font-weight:700;color:var(--text);margin:16px 0 6px;display:flex;align-items:center;justify-content:space-between;">🔗 Top 10 — DC+ Over <button onclick="addAllTop('top-combo-over-list','top10_combo_over')" style="font-size:10px;padding:3px 8px;background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.25);color:var(--accent);border-radius:6px;cursor:pointer;">➕ Todas</button></div>
     <div id="top-combo-over-list"></div>
 
@@ -2421,12 +2424,27 @@ function applyDerivedMultipleState(b){
   b.profit=profitForResult(b,derived);
   return b;
 }
+function isSimpleDcPick(p){
+  const bet=String(p?.bet||'').trim();
+  return p?.historyMarket==='dc'||p?.source==='dc'||p?.marketType==='dc'||
+    ['1X','X2','12','Dupla Chance 1X','Dupla Chance X2','Dupla Chance 12'].includes(bet);
+}
+function isHalfComboPick(p){
+  return p?.marketType==='combo'&&/^(?:1\/2|12)\s*\+/.test(String(p?.bet||''));
+}
+function historyMarketKey(b){
+  if(isSimpleDcPick(b))return 'dc';
+  const mKey=b?.historyMarket||b?.marketType||'h2h';
+  if(mKey==='combo'&&isHalfComboPick(b))return 'halfcombo';
+  return mKey;
+}
 function repairHistoryBet(b){
   if(!b||typeof b!=='object')return b;
   const out={...b};
   ['match','bet','league','date','time','source','category'].forEach(k=>{
     if(out[k]!=null)out[k]=repairMojibakeText(out[k]);
   });
+  if(isSimpleDcPick(out))out.historyMarket='dc';
   if(Array.isArray(out.legs)){
     out.legs=out.legs.map(l=>{
       if(!l||typeof l!=='object')return l;
@@ -2434,6 +2452,7 @@ function repairHistoryBet(b){
       ['teams','bet','betDisplay','league','score','date','time','result'].forEach(k=>{
         if(leg[k]!=null)leg[k]=repairMojibakeText(leg[k]);
       });
+      if(isSimpleDcPick(leg))leg.historyMarket='dc';
       return leg;
     });
   }
@@ -3207,6 +3226,7 @@ function widgetAdd(wid,home,away,bet,odd,league,time,date,source='top15',topRank
   addBet({id:Date.now().toString(),match:`${home} vs ${away}`,bet,odd,stake,league,time,date,
     addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,
     marketType:pick?.marketType||'h2h',group:pick?.group||'soccer',
+    historyMarket:pick?.historyMarket||(isSimpleDcPick(pick)?'dc':undefined),
     fixtureId,leagueId:pick?.leagueId||null,home,away,source,topRank,
     confidence:pick?.confidence||null,
     ev:pick?.ev??null,evDc:pick?.evDc??null,dcProb:pick?.dcProb??null,
@@ -5393,7 +5413,8 @@ function renderWorkerAccaCard(acca,groupKey,delay,wasRegenerated=false){
     n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,
     betDisplay:`${p.bet} · ${p.league}`,odd:`@${Number(p.odd||1).toFixed(2)}`,
     oddVal:Number(p.odd||1),date:p.date,league:p.league,result:'pending',
-    fixtureId:p.fixtureId||null,marketType:p.marketType||null
+    fixtureId:p.fixtureId||null,marketType:p.marketType||null,
+    historyMarket:p.historyMarket||(isSimpleDcPick(p)?'dc':undefined)
   }));
   if(!window._accaMeta)window._accaMeta={};
   window._accaMeta[accaId]={regenerated:wasRegenerated,worker:true};
@@ -5540,7 +5561,7 @@ function generateMultiplesLocal(){
     });
     // Store legs in a global map to avoid JSON escaping issues in onclick
     if(!window._accaLegs)window._accaLegs={};
-    window._accaLegs[accaId]=picks.map((p,i)=>({n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,betDisplay:`${p.bet} · ${p.league}`,odd:`@${p.odd.toFixed(2)}`,oddVal:p.odd,date:p.date,league:p.league,result:'pending'}));
+    window._accaLegs[accaId]=picks.map((p,i)=>({n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,betDisplay:`${p.bet} · ${p.league}`,odd:`@${p.odd.toFixed(2)}`,oddVal:p.odd,date:p.date,league:p.league,result:'pending',marketType:p.marketType||null,historyMarket:p.historyMarket||(isSimpleDcPick(p)?'dc':undefined)}));
     // Metadata da acca — útil para tracking de regenerados no histórico (backtest)
     if(!window._accaMeta)window._accaMeta={};
     window._accaMeta[accaId]={regenerated:wasRegenerated};
@@ -5763,7 +5784,8 @@ function addAccaToHistory(id,title,odd){
   if(multipleId.startsWith('exp_'))category='multiples_test';
   else if(['ligapt','overgoals','btts3','bttsno3','dc3','combo3','combo1x_over','combo_x2_over','h2h_safe3','h2h_value3','fallback_europe3','fallback_best3','fallback_value4','fallback_balanced5','topconf5','value5'].includes(multipleId))category='multiples_special';
   const source=`multiple_${multipleId}`;
-  addBet({id:Date.now().toString(),match:`Múltipla: ${title}`,bet:'Acumulador',odd,stake,league:'Múltipla',time:'—',date:new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,legs,source,category,regenerated:!!meta.regenerated});
+  const normalizedLegs=legs.map(l=>isSimpleDcPick(l)?{...l,historyMarket:'dc'}:l);
+  addBet({id:Date.now().toString(),match:`Múltipla: ${title}`,bet:'Acumulador',odd,stake,league:'Múltipla',time:'—',date:new Date().toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,legs:normalizedLegs,source,category,regenerated:!!meta.regenerated});
   const btn=document.getElementById(`${id}-btn`);
   if(btn){btn.textContent='✓ Adicionada';btn.classList.add('added');btn.disabled=true;}
   showToast('✅ Múltipla adicionada ao histórico!');
@@ -5773,6 +5795,7 @@ function addAccaToHistory(id,title,odd){
 // Global source labels used in history badges and detailed stats
 const SRC_LABELS={
   'top15':'🏆 Top15','top10_h2h':'⭐ Top 1X2','top10_totals':'⭐ Top O/U','top10_btts':'⭐ Top BTTS',
+  'top10_dc':'⭐ Top DC',
   'top10_combo':'⭐ Top DC+ (legado)','top10_combo_over':'⭐ Top DC+ Over','top10_combo_under':'⭐ Top DC+ Under',
   'top10_combo_btts':'⭐ Top DC+ BTTS','top10_combo_bttsno':'⭐ Top DC+ Não BTTS',
   'top10_combo_halfover':'⭐ Top 1/2+ Over','top10_combo_halfunder':'⭐ Top 1/2+ Under',
@@ -5836,14 +5859,11 @@ function renderDetailedStats(bets){
 
   // By market type
   const byMarket={};
+  const marketNames={h2h:'1X2 / Resultado',totals:'Over/Under',btts:'Ambas Marcam',dc:'Dupla Chance',combo:'DC+',combo_over:'DC+ Over',combo_under:'DC+ Under',combo_btts:'DC+ BTTS',combo_bttsno:'DC+ Não BTTS',halfcombo:'1/2+',half_over:'1/2+ Over',half_under:'1/2+ Under',half_btts:'1/2+ BTTS',half_bttsno:'1/2+ Não BTTS',corners:'Cantos',ht:'HT 1X2'};
   settled.forEach(b=>{
-    let k='Outro';
-    if(b.bet.startsWith('Vitória')||b.bet==='Empate')k='1X2 / Resultado';
-    else if(b.bet.includes('Over')||b.bet.includes('Under'))k='Over/Under';
-    else if(b.bet.includes('Ambas'))k='Ambas Marcam';
-    else if(b.bet.includes('Dupla'))k='Dupla Chance';
+    let k=marketNames[historyMarketKey(b)]||'Outro';
+    if(b.bet==='Acumulador')k='Múltiplas';
     else if(b.bet.includes('Handicap'))k='Handicap';
-    else if(b.bet==='Acumulador')k='Múltiplas';
     if(!byMarket[k])byMarket[k]={won:0,lost:0,profit:0,staked:0};
     byMarket[k][b.result==='won'?'won':'lost']++;
     byMarket[k].profit+=b.profit;
@@ -6066,6 +6086,7 @@ function renderHistory(){
           if(src==='top10_h2h')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top 1X2${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='top10_totals')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top O/U${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='top10_btts')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top BTTS${b.topRank?' #'+b.topRank:''}</span>`;
+          if(src==='top10_dc')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top DC${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='top10_combo')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top DC+${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='top10_combo_over')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top DC+ Over${b.topRank?' #'+b.topRank:''}</span>`;
           if(src==='top10_combo_under')return` · <span style="color:#4daaff;font-size:9px;">⭐ Top DC+ Under${b.topRank?' #'+b.topRank:''}</span>`;
@@ -6763,10 +6784,10 @@ function updateMarketCounts(){
   document.getElementById('mc-h2h').textContent=f.filter(g=>g.marketType==='h2h').length;
   document.getElementById('mc-totals').textContent=f.filter(g=>g.marketType==='totals').length;
   document.getElementById('mc-btts').textContent=f.filter(g=>g.marketType==='btts').length;
-  document.getElementById('mc-dc').textContent=f.filter(g=>g.marketType==='dc').length;
-  document.getElementById('mc-combo').textContent=f.filter(g=>g.marketType==='combo'&&!/^(?:1\/2|12)/.test(g.bet||'')).length;
+  document.getElementById('mc-dc').textContent=f.filter(isSimpleDcPick).length;
+  document.getElementById('mc-combo').textContent=f.filter(g=>g.marketType==='combo'&&!isSimpleDcPick(g)&&!isHalfComboPick(g)).length;
   const halfComboEl=document.getElementById('mc-halfcombo');
-  if(halfComboEl)halfComboEl.textContent=f.filter(g=>g.marketType==='combo'&&/^(?:1\/2|12)/.test(g.bet||'')).length;
+  if(halfComboEl)halfComboEl.textContent=f.filter(isHalfComboPick).length;
   const cornersEl=document.getElementById('mc-corners');
   if(cornersEl)cornersEl.textContent=f.filter(g=>g.marketType==='corners').length;
   const htEl=document.getElementById('mc-ht');
@@ -6842,7 +6863,7 @@ function renderMarketAcerto(bets){
     }
     else if(b.bet.startsWith('HT '))k='HT 1X2';
     else if(b.bet.includes(' + ')){
-      const isHalf=/^(?:1\/2|12)/.test(b.bet||'');
+      const isHalf=isHalfComboPick(b);
       const noBtts=(b.bet||'').includes('Não')||/[✗✘x]/i.test(b.bet||'');
       if(b.bet.includes('Over'))k=isHalf?'1/2+ Over':'DC+ Over';
       else if(b.bet.includes('Under'))k=isHalf?'1/2+ Under':'DC+ Under';
@@ -6933,8 +6954,9 @@ async function renderFiltered(){
   else if(currentSport!=='all')f=f.filter(g=>g.group===currentSport);
   // Market filter
   if(currentMarket==='ev')f=f.filter(g=>g.ev>0);
-  else if(currentMarket==='combo')f=f.filter(g=>g.marketType==='combo'&&!/^(?:1\/2|12)/.test(g.bet||''));
-  else if(currentMarket==='halfcombo')f=f.filter(g=>g.marketType==='combo'&&/^(?:1\/2|12)/.test(g.bet||''));
+  else if(currentMarket==='dc')f=f.filter(isSimpleDcPick);
+  else if(currentMarket==='combo')f=f.filter(g=>g.marketType==='combo'&&!isSimpleDcPick(g)&&!isHalfComboPick(g));
+  else if(currentMarket==='halfcombo')f=f.filter(isHalfComboPick);
   else if(currentMarket!=='all')f=f.filter(g=>g.marketType===currentMarket);
   // Odds range
   if(currentRange!=='all'){const[mn,mx]=ODD_RANGES[currentRange];f=f.filter(g=>g.odd>=mn&&g.odd<mx);}
@@ -7073,7 +7095,7 @@ function updateCountdown(){
 function comboBucket(p){
   const bet=p?.bet||'';
   if(p?.marketType!=='combo')return null;
-  const isHalf=/^(?:1\/2|12)/.test(bet);
+  const isHalf=isHalfComboPick(p);
   const bNorm=bet.normalize?bet.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase():bet.toLowerCase();
   const noBtts=bNorm.includes('nao')||bNorm.includes('no btts')||/[✗✘x]/i.test(bet);
   if(bet.includes('Over'))return isHalf?{family:'half',type:'halfover'}:{family:'dc',type:'over'};
@@ -7294,6 +7316,7 @@ function renderMarketTop10(){
     {id:'top-h2h-list',   type:'h2h',     source:'top10_h2h',   label:'1X2'},
     {id:'top-totals-list',type:'totals',  source:'top10_totals',label:'O/U'},
     {id:'top-btts-list',  type:'btts',    source:'top10_btts',  label:'BTTS'},
+    {id:'top-dc-list',    type:'dc',      source:'top10_dc',    label:'DC'},
     {id:'top-combo-over-list', type:'combo', source:'top10_combo_over', label:'DC+ Over',
       subFilter:p=>comboWinner.get(`${p.home}|${p.away}`)?.pick===p&&comboWinner.get(`${p.home}|${p.away}`)?.type==='over'},
     {id:'top-combo-under-list', type:'combo', source:'top10_combo_under', label:'DC+ Under',
@@ -7320,7 +7343,8 @@ function renderMarketTop10(){
     const el=document.getElementById(id);if(!el)return;
     const seen=new Set();
     const candidates=pool.filter(p=>{
-      if(p.marketType!==type)return false;
+      if(type==='dc'){if(!isSimpleDcPick(p))return false;}
+      else if(p.marketType!==type)return false;
       if(subFilter&&!subFilter(p))return false;
       const k=`${p.home}|${p.away}`;
       if(seen.has(k))return false;
@@ -7449,11 +7473,11 @@ function exportPublicPicks(){
   }
   // Top 10 per market — including DC+ sub-markets
   const byMarket={};
-  const marketTypes=['h2h','totals','btts','corners','ht'];
+  const marketTypes=['h2h','totals','btts','dc','corners','ht'];
   marketTypes.forEach(mt=>{
     const seenM=new Set();
     byMarket[mt]=[];
-    for(const p of top.filter(x=>x.marketType===mt)){
+    for(const p of top.filter(x=>mt==='dc'?isSimpleDcPick(x):x.marketType===mt)){
       const k=`${p.home}|${p.away}`;
       if(seenM.has(k))continue;
       seenM.add(k);
@@ -7464,14 +7488,14 @@ function exportPublicPicks(){
   // DC+ export: escolher so a melhor combo por jogo, sem conflitos entre tabs.
   const comboExportWinner=new Map();
   const halfExportWinner=new Map();
-  top.filter(p=>p.marketType==='combo'&&!/^(?:1\/2|12)/.test(p.bet||'')).forEach(p=>{
+  top.filter(p=>p.marketType==='combo'&&!isSimpleDcPick(p)&&!isHalfComboPick(p)).forEach(p=>{
     const bucket=comboBucket(p);
     if(!bucket||bucket.family!=='dc')return;
     const k=`${p.home}|${p.away}`;
     const cur=comboExportWinner.get(k);
     if(!cur||composite(p)>composite(cur.pick))comboExportWinner.set(k,{...bucket,pick:p});
   });
-  top.filter(p=>p.marketType==='combo'&&/^(?:1\/2|12)/.test(p.bet||'')).forEach(p=>{
+  top.filter(isHalfComboPick).forEach(p=>{
     const bucket=comboBucket(p);
     if(!bucket||bucket.family!=='half')return;
     const k=`${p.home}|${p.away}`;
@@ -7541,7 +7565,7 @@ function exportPublicPicks(){
     return parts.slice(0,3).join(' · ')+ '.';
   }
 
-  const cleanPick=p=>({home:p.home,away:p.away,league:p.league,time:p.time,date:p.date,bet:p.bet,marketType:p.marketType,odd:p.odd,prob:p.prob,ev:p.ev,confidence:p.confidence,
+  const cleanPick=p=>({home:p.home,away:p.away,league:p.league,time:p.time,date:p.date,bet:p.bet,marketType:p.marketType,historyMarket:p.historyMarket||(isSimpleDcPick(p)?'dc':undefined),odd:p.odd,prob:p.prob,ev:p.ev,confidence:p.confidence,
     reason:generateReason(p),
     bookmakerOdds:(p.bookmakerOdds||[]).slice(0,5).map(b=>({name:b.name,odd:b.odd}))
   });
@@ -7553,6 +7577,7 @@ function exportPublicPicks(){
       h2h:byMarket.h2h.map(cleanPick),
       totals:byMarket.totals.map(cleanPick),
       btts:byMarket.btts.map(cleanPick),
+      dc:(byMarket.dc||[]).map(cleanPick),
       combo_over:(byMarket.combo_over||[]).map(cleanPick),
       combo_under:(byMarket.combo_under||[]).map(cleanPick),
       combo_btts:(byMarket.combo_btts||[]).map(cleanPick),
@@ -7571,7 +7596,7 @@ function exportPublicPicks(){
   a.href=url;a.download='picks.json';a.click();
   URL.revokeObjectURL(url);
   const totalCombo=(byMarket.combo_over||[]).length+(byMarket.combo_under||[]).length+(byMarket.combo_btts||[]).length+(byMarket.combo_bttsno||[]).length+(byMarket.half_over||[]).length+(byMarket.half_under||[]).length+(byMarket.half_btts||[]).length+(byMarket.half_bttsno||[]).length;
-  const totalPicks=top15.length+byMarket.h2h.length+byMarket.totals.length+byMarket.btts.length+totalCombo+byMarket.corners.length+byMarket.ht.length;
+  const totalPicks=top15.length+byMarket.h2h.length+byMarket.totals.length+byMarket.btts.length+(byMarket.dc||[]).length+totalCombo+byMarket.corners.length+byMarket.ht.length;
   const fb=document.getElementById('public-feedback');
   if(fb){fb.textContent=`✅ Exportado: ${top15.length} Top 15 + ${totalPicks} picks por mercado · ${Object.keys(affs).length} afiliações`;setTimeout(()=>{fb.textContent='';},5000);}
 }
@@ -8100,7 +8125,7 @@ function runAutoInsights(){
     else if(b.bet.includes('Cantos'))k='Cantos';
     else if(b.bet.startsWith('HT '))k='HT 1X2';
     else if(b.bet.includes(' + ')){
-      const isHalf=/^(?:1\/2|12)/.test(b.bet||'');
+      const isHalf=isHalfComboPick(b);
       const noBtts=(b.bet||'').includes('Não')||/[✗✘x]/i.test(b.bet||'');
       if(b.bet.includes('Over'))k=isHalf?'1/2+ Over':'DC+ Over';
       else if(noBtts&&b.bet.includes('Ambas'))k=isHalf?'1/2+ Não Ambas':'DC+ Não Ambas';
@@ -8161,7 +8186,7 @@ function runAutoInsights(){
   });
   const srcRanked=Object.entries(bySource).filter(([,v])=>v.n>=5).map(([k,v])=>({k,roi:v.st?v.p/v.st*100:0,wr:v.w/v.n*100,n:v.n})).sort((a,b)=>b.roi-a.roi);
   if(srcRanked.length>=2){
-    const srcLabels={'top15':'🏆 Top15','top10_h2h':'⭐ Top 1X2','top10_totals':'⭐ Top O/U','top10_btts':'⭐ Top BTTS',
+    const srcLabels={'top15':'🏆 Top15','top10_h2h':'⭐ Top 1X2','top10_totals':'⭐ Top O/U','top10_btts':'⭐ Top BTTS','top10_dc':'⭐ Top DC',
       'top10_combo':'⭐ Top DC+','top10_combo_over':'⭐ Top DC+ Over','top10_combo_under':'⭐ Top DC+ Under','top10_combo_btts':'⭐ Top DC+ BTTS','top10_combo_bttsno':'⭐ Top DC+ Não BTTS',
       'top10_combo_halfover':'⭐ Top 1/2+ Over','top10_combo_halfunder':'⭐ Top 1/2+ Under','top10_combo_halfbtts':'⭐ Top 1/2+ BTTS','top10_combo_halfbttsno':'⭐ Top 1/2+ Não BTTS',
       'top10_corners':'⭐ Top Cantos','top10_ht':'⭐ Top HT','multiples':'🎰 Múltiplas','picks':'📋 Picks'};
@@ -8239,7 +8264,7 @@ function runHistoryBacktest(){
   if(all.length===0){el.innerHTML='<div style="color:var(--muted);font-size:12px;">Sem apostas verificadas no histórico ainda.</div>';return;}
 
   // By market
-  const markets={h2h:'1X2',totals:'Over/Under',btts:'BTTS',dc:'Dupla Chance',combo:'DC+',halfcombo:'1/2+'};
+  const markets={h2h:'1X2',totals:'Over/Under',btts:'BTTS',dc:'Dupla Chance',combo:'DC+',combo_over:'DC+ Over',combo_under:'DC+ Under',combo_btts:'DC+ BTTS',combo_bttsno:'DC+ Não BTTS',halfcombo:'1/2+',half_over:'1/2+ Over',half_under:'1/2+ Under',half_btts:'1/2+ BTTS',half_bttsno:'1/2+ Não BTTS'};
   const byMarket={};
   const byConf={low:[],mid:[],high:[]};
   const byLeague={};
@@ -8253,8 +8278,7 @@ function runHistoryBacktest(){
     totalProfit+=profit;
 
     // Market
-    let mKey=b.marketType||'h2h';
-    if(mKey==='combo'&&/^(?:1\/2|12)/.test(b.bet||''))mKey='halfcombo';
+    const mKey=historyMarketKey(b);
     if(!byMarket[mKey])byMarket[mKey]={w:0,l:0,profit:0,stake:0};
     if(won)byMarket[mKey].w++;else byMarket[mKey].l++;
     byMarket[mKey].profit+=profit;
