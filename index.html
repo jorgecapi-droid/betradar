@@ -1616,7 +1616,12 @@ async function prefetchRecentResults(){
   };
 
   // STRATEGY 1: Direct fixture ID lookup (most reliable, up to 20 IDs per call)
-  const uniqueFids=[...new Set(pending.filter(b=>b.fixtureId).map(b=>b.fixtureId))];
+  const uniqueFids=[...new Set(pending.flatMap(b=>{
+    const ids=[];
+    if(b.fixtureId)ids.push(b.fixtureId);
+    (b.legs||[]).forEach(l=>{if(l.fixtureId)ids.push(l.fixtureId);});
+    return ids;
+  }).filter(Boolean))];
   console.log('Pending bets:',pending.length,'with fixtureId:',uniqueFids.length);
   if(uniqueFids.length>0){
     if(resultEl)resultEl.textContent=`⏳ Passo 1/3 — A buscar ${uniqueFids.length} jogos por ID...`;
@@ -2790,14 +2795,14 @@ async function checkPendingResults(){
           const[lh,la]=lpts;
           const ldateStr=getDateStr(bet,leg.date);
           try{
-            // Check resultCache first
+            // Check resultCache first: fixtureId is the most reliable for multiples.
             const lck=`${lh}|${la}`,lckN=`${normalizeName(lh)}|${normalizeName(la)}`;
-            const lCached=resultCache[lck]||resultCache[lckN];
+            const lCached=(leg.fixtureId&&resultCache[`fid_${leg.fixtureId}`])||resultCache[lck]||resultCache[lckN];
             let fix=null;
-            if(lCached&&(lCached.fixtureDate||'').slice(0,10)===ldateStr){
-              fix={goals:{home:lCached.gh,away:lCached.ga},teams:{home:{name:lCached.fhName},away:{name:lCached.faName}},fixture:{id:lCached.fid,status:{short:'FT'}}};
+            if(lCached&&(leg.fixtureId||(lCached.fixtureDate||'').slice(0,10)===ldateStr)){
+              fix={goals:{home:lCached.gh,away:lCached.ga},teams:{home:{name:lCached.fhName},away:{name:lCached.faName}},fixture:{id:lCached.fid,status:{short:lCached.status||'FT'}},score:{halftime:{home:lCached.htH??null,away:lCached.htA??null}}};
             } else {
-              const res=await apiFetch(`${FORM_BASE}/fixtures?date=${ldateStr}&status=FT`,{headers:{'x-apisports-key':getFormKey()}});
+              const res=await apiFetch(`${FORM_BASE}/fixtures?date=${ldateStr}&status=FT-AET-PEN`,{headers:{'x-apisports-key':getFormKey()}});
               const data=await res.json();
               fix=findFixture(data?.response||[],lh,la);
             }
