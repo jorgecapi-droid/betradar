@@ -183,7 +183,7 @@
   /* ODDS TABS */
   .odds-tabs-wrap{margin-bottom:12px;}
   .section-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;font-family:'DM Mono',monospace;}
-  .odds-tabs{display:flex;border:1px solid var(--border);border-radius:11px;overflow:hidden;}
+  .odds-tabs{display:flex;border:1px solid var(--border);border-radius:11px;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(0,229,160,.72) rgba(31,45,61,.55);padding-bottom:5px;}
   .odds-tab{flex:1;padding:7px 3px;text-align:center;font-family:'DM Mono',monospace;cursor:pointer;background:var(--surface);color:var(--muted);border:none;border-right:1px solid var(--border);transition:all .2s;line-height:1.3;}
   .odds-tab:last-child{border-right:none;}
   .odds-tab .tr{font-size:10px;font-weight:700;display:block;color:var(--text2);}
@@ -358,7 +358,7 @@
   .multiples-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;}
   .regen-btn{background:var(--accent-dim);border:1px solid rgba(0,229,160,.2);color:var(--accent);padding:6px 14px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;}
   .regen-btn:hover{background:rgba(0,229,160,.2);}
-  .sub-tabs{display:flex;gap:3px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:18px;}
+  .sub-tabs{display:flex;gap:3px;padding:3px 3px 7px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow-x:auto;margin-bottom:18px;scrollbar-width:thin;scrollbar-color:rgba(0,229,160,.72) rgba(31,45,61,.55);}
   .sub-tab{flex:1;padding:8px 8px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);border:none;border-radius:9px;transition:all .2s;}
   .sub-tab.active{background:var(--surface3);color:var(--gold);box-shadow:0 1px 5px rgba(0,0,0,.3);}
   .sub-tab:hover:not(.active){color:var(--text2);}
@@ -499,9 +499,14 @@
   .disclaimer strong{color:var(--red);}
 
   /* MARKET TABS */
-  .market-tabs{display:flex;gap:3px;padding:3px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow-x:auto;margin-bottom:12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;}
-  .market-tabs::-webkit-scrollbar{display:none;}
-  .main-tabs{display:flex;gap:4px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow-x:auto;margin-bottom:18px;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;}
+  .market-tabs{display:flex;gap:3px;padding:3px 3px 7px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow-x:auto;margin-bottom:12px;scrollbar-width:thin;scrollbar-color:rgba(0,229,160,.72) rgba(31,45,61,.55);-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;}
+  .main-tabs{display:flex;gap:4px;padding:4px 4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow-x:auto;margin-bottom:18px;scrollbar-width:thin;scrollbar-color:rgba(0,229,160,.72) rgba(31,45,61,.55);-webkit-overflow-scrolling:touch;touch-action:pan-x;overscroll-behavior-x:contain;}
+  .market-tabs::-webkit-scrollbar,.main-tabs::-webkit-scrollbar,.odds-tabs::-webkit-scrollbar,.sub-tabs::-webkit-scrollbar{display:block;height:6px;}
+  .market-tabs::-webkit-scrollbar-track,.main-tabs::-webkit-scrollbar-track,.odds-tabs::-webkit-scrollbar-track,.sub-tabs::-webkit-scrollbar-track{background:rgba(31,45,61,.55);border-radius:999px;margin:8px;}
+  .market-tabs::-webkit-scrollbar-thumb,.main-tabs::-webkit-scrollbar-thumb,.odds-tabs::-webkit-scrollbar-thumb,.sub-tabs::-webkit-scrollbar-thumb{background:linear-gradient(90deg,var(--accent),var(--accent3));border-radius:999px;border:1px solid rgba(5,8,13,.65);}
+  .market-tabs.has-overflow:not(.at-end),.main-tabs.has-overflow:not(.at-end),.odds-tabs.has-overflow:not(.at-end),.sub-tabs.has-overflow:not(.at-end){box-shadow:inset -20px 0 16px -18px rgba(0,229,160,.75);}
+  .market-tabs.has-overflow:not(.at-start),.main-tabs.has-overflow:not(.at-start),.odds-tabs.has-overflow:not(.at-start),.sub-tabs.has-overflow:not(.at-start){box-shadow:inset 20px 0 16px -18px rgba(77,166,255,.7);}
+  .market-tabs.has-overflow:not(.at-start):not(.at-end),.main-tabs.has-overflow:not(.at-start):not(.at-end),.odds-tabs.has-overflow:not(.at-start):not(.at-end),.sub-tabs.has-overflow:not(.at-start):not(.at-end){box-shadow:inset 20px 0 16px -18px rgba(77,166,255,.7),inset -20px 0 16px -18px rgba(0,229,160,.75);}
   .market-tab{flex:none;padding:7px 11px;text-align:center;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:var(--muted);border:none;border-radius:9px;transition:all .2s;white-space:nowrap;}
   .market-tab:last-child{margin-right:4px;} /* breathing room at end */
   .market-tab.active{background:var(--surface3);color:var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.3);}
@@ -2572,19 +2577,76 @@ function nameMatch(a,b){
   const wb=nb.split(' ').filter(w=>w.length>3);
   return wa.some(w=>wb.includes(w))||wb.some(w=>wa.includes(w));
 }
+function normBetText(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
+function isCornersBetText(s){
+  const b=normBetText(s);
+  return b.includes('cantos')||b.includes('corners')||b.includes('corner kicks');
+}
+function parseLineFromText(s,fallback=9.5){
+  const m=String(s||'').replace(',','.').match(/(\d+(?:\.\d+)?)/);
+  return m?parseFloat(m[1]):fallback;
+}
+function isOverLikeText(s){
+  const b=normBetText(s);
+  return b.startsWith('mais ')||b.startsWith('over ');
+}
+function isUnderLikeText(s){
+  const b=normBetText(s);
+  return b.startsWith('menos ')||b.startsWith('under ');
+}
+function totalCornersFromStatsPayload(payload){
+  const stats=payload?.response||[];
+  if(stats.length<1)return null;
+  let found=false,total=0;
+  stats.forEach(team=>{
+    const c=team.statistics?.find(s=>/corner kicks/i.test(s.type||''));
+    const v=parseInt(c?.value);
+    if(Number.isFinite(v)){found=true;total+=v;}
+  });
+  return found?total:null;
+}
+function evalCornersBetText(b,totalCorners){
+  if(totalCorners===null||totalCorners===undefined)return null;
+  const line=parseLineFromText(b,9.5);
+  if(isOverLikeText(b))return totalCorners>line;
+  if(isUnderLikeText(b))return totalCorners<line;
+  return null;
+}
 
 async function checkPendingResultsSmart(){
   const btn=document.getElementById('check-btn');
   const resultEl=document.getElementById('check-result');
   if(btn)btn.disabled=true;
 
-  // Step 1: Load recent results into cache
-  if(resultEl){resultEl.textContent='⏳ Passo 1/2 — A carregar resultados recentes...';resultEl.className='check-result warn';resultEl.style.display='block';}
-  await prefetchRecentResults();
+  try{
+    // Step 1: Load recent results into cache
+    if(resultEl){resultEl.textContent='⏳ Passo 1/2 — A carregar resultados recentes...';resultEl.className='check-result warn';resultEl.style.display='block';}
+    let prefetchWarning='';
+    try{
+      await Promise.race([
+        prefetchRecentResults(),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout ao carregar resultados recentes')),45000))
+      ]);
+    }catch(e){
+      prefetchWarning=e.message||'pré-carregamento incompleto';
+      console.warn('prefetchRecentResults incomplete:',e);
+    }
 
-  // Step 2: Verify pending bets using cache
-  if(resultEl){resultEl.textContent='⏳ Passo 2/2 — A verificar apostas pendentes...';resultEl.className='check-result warn';}
-  await checkPendingResults();
+    // Step 2: Verify pending bets using cache
+    if(resultEl){resultEl.textContent=prefetchWarning?'⏳ Passo 2/2 — Cache parcial, a verificar pendentes...':'⏳ Passo 2/2 — A verificar apostas pendentes...';resultEl.className='check-result warn';}
+    await checkPendingResults();
+  }catch(e){
+    console.warn('checkPendingResultsSmart failed:',e);
+    if(resultEl){
+      resultEl.textContent=`⚠️ Verificação interrompida: ${e.message||'erro inesperado'}`;
+      resultEl.className='check-result warn';
+      resultEl.style.display='block';
+    }
+  }finally{
+    if(btn)btn.disabled=false;
+  }
 }
 
 async function checkPendingResults(){
@@ -2698,8 +2760,12 @@ async function checkPendingResults(){
 
     // BTTS — aceita variações antigas/novas guardadas no histórico
     const bNorm=b.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    if((bNorm.includes('ambas marcam')||bNorm.includes('btts'))&&!bNorm.includes('nao')&&!bNorm.includes('no')&&!/[x✗✘]/i.test(b))return gh>0&&ga>0;
-    if(bNorm.includes('nao ambas marcam')||bNorm.includes('no btts')||bNorm.includes('btts no')||/ambas marcam\s*[x✗✘]/i.test(b)||/btts\s*[x✗✘]/i.test(b))return!(gh>0&&ga>0);
+    const isNoBtts=/\b(?:nao|no)\s+(?:ambas\s+marcam|btts)\b/i.test(bNorm)||
+      /\b(?:ambas\s+marcam|btts)\s+(?:nao|no)\b/i.test(bNorm)||
+      /ambas marcam\s*[x✗✘]/i.test(bNorm)||/btts\s*[x✗✘]/i.test(bNorm);
+    const isYesBtts=(bNorm.includes('ambas marcam')||bNorm.includes('btts'))&&!isNoBtts;
+    if(isYesBtts)return gh>0&&ga>0;
+    if(isNoBtts)return!(gh>0&&ga>0);
 
     // DC
     if(b==='Dupla Chance 1X'||b==='1X')return gh>=ga;
@@ -2808,7 +2874,18 @@ async function checkPendingResults(){
             }
             if(!fix){allDone=false;continue;}
             const gh=fix.goals.home??0,ga=fix.goals.away??0;
-            const legWon=evalBet(leg.bet||'',gh,ga,fix.teams.home.name,fix.teams.away.name);
+            let legWon=null;
+            if(isCornersBetText(leg.bet)){
+              const legFixtureId=fix.fixture?.id||leg.fixtureId;
+              let legCorners=null;
+              if(legFixtureId){
+                const sr=await apiFetch(`${FORM_BASE}/fixtures/statistics?fixture=${legFixtureId}`,{headers:{'x-apisports-key':getFormKey()}});
+                if(sr.ok)legCorners=totalCornersFromStatsPayload(await sr.json());
+              }
+              legWon=evalCornersBetText(leg.bet,legCorners);
+            }else{
+              legWon=evalBet(leg.bet||'',gh,ga,fix.teams.home.name,fix.teams.away.name);
+            }
             if(legWon!==null){leg.result=legWon?'won':'lost';leg.score=`${gh}-${ga}`;}
             else{allDone=false;}
           }catch{allDone=false;}
@@ -2922,31 +2999,21 @@ async function checkPendingResults(){
 
       // Fetch corners stats if bet involves cantos
       let totalCorners=null; // null = unknown, number = known
-      if(bet.bet.includes('Cantos')){
+      if(isCornersBetText(bet.bet)){
         const fixtureId=fid||bet.fixtureId;
         if(fixtureId){
           try{
             const sr=await apiFetch(`${FORM_BASE}/fixtures/statistics?fixture=${fixtureId}`,{headers:{'x-apisports-key':getFormKey()}});
             const sd=await sr.json();
-            const stats=sd?.response||[];
-            if(stats.length>=2){
-              totalCorners=stats.reduce((sum,team)=>{
-                const c=team.statistics?.find(s=>s.type==='Corner Kicks');
-                const v=parseInt(c?.value||0)||0;
-                return sum+v;
-              },0);
-            }
+            totalCorners=totalCornersFromStatsPayload(sd);
           }catch(e){console.warn('corners fetch error:',e);}
         }
       }
 
       // Helper to eval a single bet part (including corners)
       const evalPart=(b)=>{
-        if(b.includes('Cantos')){
-          if(totalCorners===null)return null; // stats not available
-          const line=parseFloat(b.match(/[\d.]+/)?.[0]||9.5);
-          const isMais=b.startsWith('Mais');
-          return isMais?totalCorners>line:totalCorners<line;
+        if(isCornersBetText(b)){
+          return evalCornersBetText(b,totalCorners);
         }
         return evalBet(b,gh,ga,fixture.teams.home.name,fixture.teams.away.name);
       };
@@ -2966,7 +3033,7 @@ async function checkPendingResults(){
       else{
         // Bet could not be evaluated
         let reason='Avaliação falhou';
-        if(bet.bet.includes('Cantos'))reason='Cantos: stats indisponíveis';
+        if(isCornersBetText(bet.bet))reason='Cantos: stats indisponíveis';
         else if(bet.bet.startsWith('HT '))reason='HT: intervalo não disponível';
         unresolved.push({bet:bet.bet,match:bet.match,reason});
       }
@@ -3067,12 +3134,14 @@ function showPage(id,btn){
   if(id==='top15')renderTop15();
   if(id==='picks')renderFiltered();
   if(id==='backtest'){document.getElementById('bt-history-results').innerHTML='';document.getElementById('bt-sim-results').innerHTML='';}
+  if(typeof updateScrollableHints==='function')requestAnimationFrame(updateScrollableHints);
 }
 function showSubPage(id,btn){
   document.querySelectorAll('.sub-page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.sub-tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('sub-'+id).classList.add('active');
   btn.classList.add('active');
+  if(typeof updateScrollableHints==='function')requestAnimationFrame(updateScrollableHints);
 }
 // ── TOMORROW STATE ────────────────────────────────────────────────
 let tomRange='all', tomSort='score';
@@ -5418,7 +5487,7 @@ function renderWorkerAccaCard(acca,groupKey,delay,wasRegenerated=false){
     n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,
     betDisplay:`${p.bet} · ${p.league}`,odd:`@${Number(p.odd||1).toFixed(2)}`,
     oddVal:Number(p.odd||1),date:p.date,league:p.league,result:'pending',
-    fixtureId:p.fixtureId||null,marketType:p.marketType||null,
+    fixtureId:p.fixtureId||null,leagueId:p.leagueId||null,time:p.time||null,marketType:p.marketType||null,
     historyMarket:p.historyMarket||(isSimpleDcPick(p)?'dc':undefined)
   }));
   if(!window._accaMeta)window._accaMeta={};
@@ -5566,7 +5635,7 @@ function generateMultiplesLocal(){
     });
     // Store legs in a global map to avoid JSON escaping issues in onclick
     if(!window._accaLegs)window._accaLegs={};
-    window._accaLegs[accaId]=picks.map((p,i)=>({n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,betDisplay:`${p.bet} · ${p.league}`,odd:`@${p.odd.toFixed(2)}`,oddVal:p.odd,date:p.date,league:p.league,result:'pending',marketType:p.marketType||null,historyMarket:p.historyMarket||(isSimpleDcPick(p)?'dc':undefined)}));
+    window._accaLegs[accaId]=picks.map((p,i)=>({n:i+1,teams:`${p.home} vs ${p.away}`,home:p.home,away:p.away,bet:p.bet,betDisplay:`${p.bet} · ${p.league}`,odd:`@${p.odd.toFixed(2)}`,oddVal:p.odd,date:p.date,league:p.league,result:'pending',fixtureId:p.fixtureId||null,leagueId:p.leagueId||null,time:p.time||null,marketType:p.marketType||null,historyMarket:p.historyMarket||(isSimpleDcPick(p)?'dc':undefined)}));
     // Metadata da acca — útil para tracking de regenerados no histórico (backtest)
     if(!window._accaMeta)window._accaMeta={};
     window._accaMeta[accaId]={regenerated:wasRegenerated};
@@ -6781,6 +6850,7 @@ function setMarket(market,btn){
   document.querySelectorAll('.market-tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   renderFiltered();
+  if(typeof updateScrollableHints==='function')requestAnimationFrame(updateScrollableHints);
 }
 function updateMarketCounts(){
   const now=Date.now();
@@ -6869,7 +6939,7 @@ function renderMarketAcerto(bets){
     else if(b.bet.startsWith('HT '))k='HT 1X2';
     else if(b.bet.includes(' + ')){
       const isHalf=isHalfComboPick(b);
-      const noBtts=(b.bet||'').includes('Não')||/[✗✘x]/i.test(b.bet||'');
+      const noBtts=isNoBttsText(b.bet||'');
       if(b.bet.includes('Over'))k=isHalf?'1/2+ Over':'DC+ Over';
       else if(b.bet.includes('Under'))k=isHalf?'1/2+ Under':'DC+ Under';
       else if(noBtts&&b.bet.includes('Ambas'))k=isHalf?'1/2+ Não Ambas':'DC+ Não Ambas';
@@ -7097,12 +7167,20 @@ function updateCountdown(){
 }
 
 // ── TOP 10 ────────────────────────────────────────────────────────
+function isNoBttsText(bet){
+  const raw=String(bet||'');
+  const norm=raw.normalize?raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase():raw.toLowerCase();
+  return /(?:nao|no)\s+(?:ambas\s+marcam|btts)/.test(norm) ||
+    /(?:ambas\s+marcam|btts)\s*(?:nao|no|x)\b/.test(norm) ||
+    /(?:ambas\s+marcam|btts)\s*[✗✘]/i.test(raw);
+}
+
 function comboBucket(p){
   const bet=p?.bet||'';
   if(p?.marketType!=='combo')return null;
   const isHalf=isHalfComboPick(p);
   const bNorm=bet.normalize?bet.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase():bet.toLowerCase();
-  const noBtts=bNorm.includes('nao')||bNorm.includes('no btts')||/[✗✘x]/i.test(bet);
+  const noBtts=isNoBttsText(bet);
   if(bet.includes('Over'))return isHalf?{family:'half',type:'halfover'}:{family:'dc',type:'over'};
   if(bet.includes('Under')&&!bet.includes('Menos'))return isHalf?{family:'half',type:'halfunder'}:{family:'dc',type:'under'};
   if(isHalf&&(bNorm.includes('ambas marcam')||bNorm.includes('btts')))return{family:'half',type:noBtts?'halfbttsno':'halfbtts'};
@@ -8131,7 +8209,7 @@ function runAutoInsights(){
     else if(b.bet.startsWith('HT '))k='HT 1X2';
     else if(b.bet.includes(' + ')){
       const isHalf=isHalfComboPick(b);
-      const noBtts=(b.bet||'').includes('Não')||/[✗✘x]/i.test(b.bet||'');
+      const noBtts=isNoBttsText(b.bet||'');
       if(b.bet.includes('Over'))k=isHalf?'1/2+ Over':'DC+ Over';
       else if(noBtts&&b.bet.includes('Ambas'))k=isHalf?'1/2+ Não Ambas':'DC+ Não Ambas';
       else if(b.bet.includes('Ambas'))k=isHalf?'1/2+ Ambas':'DC+ Ambas';
@@ -8583,8 +8661,21 @@ if(localStorage.getItem('br_ev_default')==='1'){
   document.querySelectorAll('.market-tab').forEach((b,i)=>{b.classList.toggle('active',i===5);});
 }
 loadGames(false);
+function updateScrollableHints(){
+  document.querySelectorAll('.market-tabs,.main-tabs,.odds-tabs,.sub-tabs').forEach(el=>{
+    const overflow=el.scrollWidth>el.clientWidth+4;
+    const atStart=el.scrollLeft<=2;
+    const atEnd=el.scrollLeft+el.clientWidth>=el.scrollWidth-2;
+    el.classList.toggle('has-overflow',overflow);
+    el.classList.toggle('at-start',!overflow||atStart);
+    el.classList.toggle('at-end',!overflow||atEnd);
+  });
+}
+window.addEventListener('resize',updateScrollableHints);
+requestAnimationFrame(updateScrollableHints);
 // Prevent horizontal scroll on tab bars from propagating to page scroll
 document.querySelectorAll('.market-tabs,.main-tabs,.odds-tabs,.sub-tabs').forEach(el=>{
+  el.addEventListener('scroll',updateScrollableHints,{passive:true});
   el.addEventListener('touchstart',e=>{if(Math.abs(e.touches[0].clientX)>0)e.stopPropagation();},{passive:true});
   el.addEventListener('touchmove',e=>{
     const dx=Math.abs(e.touches[0].clientX-(el._tx||e.touches[0].clientX));
