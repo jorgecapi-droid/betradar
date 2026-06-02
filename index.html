@@ -2304,18 +2304,32 @@ function calcConfidence(pick, hf=[], af=[], hs=null, as_=null){
     }
   }
 
-  // ── 8. PREVISÃO API (+1/-1) ───────────────────────────────────
+  // ── 8. PREVISÃO API (#2b: percent escalado + comparison) ──────
   if(pick.home&&pick.away){
     const fid=upcomingFixtureCache?.[`${pick.home}|${pick.away}`];
     const pred=fid?predCache[fid]:null;
     if(pred){
-      const pHome=parseInt(pred.winPct?.home)||0;
-      const pAway=parseInt(pred.winPct?.away)||0;
+      const pctNum=s=>{const v=parseFloat(String(s==null?'':s).replace('%',''));return Number.isFinite(v)?v:null;};
       const side=betSide(pick);
-      if(side==='home'&&pHome>55)      score+=1;
-      else if(side==='away'&&pAway>55) score+=1;
-      else if(side==='home'&&pHome<35) score-=1;
-      else if(side==='away'&&pAway<35) score-=1;
+      // 8a. percent do lado apostado — escada (era binário >55/<35, máx +1)
+      if(side==='home'||side==='away'){
+        const pSide=side==='home'?pctNum(pred.winPct?.home):pctNum(pred.winPct?.away);
+        if(pSide!=null){
+          if(pSide>60)score+=2;else if(pSide>50)score+=1;else if(pSide<30)score-=1;
+        }
+      }
+      // 8b. comparison agregada (total+attack) — já em cache no predCache
+      if(side==='home'||side==='away'){
+        const agree=[pred.total,pred.attack]
+          .filter(Boolean)
+          .map(c=>pctNum(side==='home'?c.home:c.away))
+          .filter(v=>v!=null);
+        if(agree.length){
+          const avg=agree.reduce((a,b)=>a+b,0)/agree.length;
+          if(avg>=58)score+=1;else if(avg<=42)score-=1;
+        }
+      }
+      // 8c. recomendação O/U da API (inalterado)
       if(pick.marketType==='totals'&&pred.underOver){
         const rec=pred.underOver;
         if(pick.bet.includes('Over')&&rec.includes('+'))      score+=1;
@@ -2331,6 +2345,25 @@ function calcConfidence(pick, hf=[], af=[], hs=null, as_=null){
   else if(pick.odd>3.5)     score-=1;
   if(pick.marketType==='combo')score-=2; // combos têm risco acumulado
   if(pick.marketType==='ht') score-=1;  // HT é menos previsível
+
+  // ── 10. LINEUPS CONFIRMADOS (#2b/3C) ──────────────────────────
+  // XI publicado torna o sinal de ausências real. Adversário desfalcado + XI
+  // confirmado → reforça o lado apostado (máx +1). lineupCache[fid] é um objeto
+  // { [nome equipa]: {startXI,...} }, por isso conta-se por nº de equipas.
+  if(pick.group==='soccer'){
+    const fid=upcomingFixtureCache?.[`${pick.home}|${pick.away}`];
+    const lineup=fid?lineupCache[fid]:null;
+    if(lineup&&Object.keys(lineup).length>=2){
+      const side=betSide(pick);
+      const oppName=side==='home'?pick.away:side==='away'?pick.home:null;
+      if(oppName){
+        const inj=fid?(injuryCache[fid]||[]):[];
+        const oppApi=formCache[oppName+'_apiName'];
+        const oppInj=inj.filter(i=>i.team===oppName||i.team===oppApi).length;
+        if(oppInj>=2)score+=1;
+      }
+    }
+  }
 
   // Cap baseado em EV: usa evDc (Dixon-Coles, team-based) quando disponível,
   // fallback para ev simples. evDc é o sinal mais robusto.
@@ -3439,6 +3472,13 @@ function calcXG(hs, as_, isHomePerspective, hName, aName){
   // Try shot-based xG first (more accurate)
   const hAdv=hName?advancedStatsCache[`adv_${hName}`]:null;
   const aAdv=aName?advancedStatsCache[`adv_${aName}`]:null;
+  // #2b: xG REAL primeiro (mais fiável que o proxy de remates). Só com sample >=2 jogos.
+  if(hAdv&&aAdv&&hAdv.xgRealAvg!=null&&aAdv.xgRealAvg!=null&&(hAdv.xgRealGames||0)>=2&&(aAdv.xgRealGames||0)>=2){
+    const hXG=hAdv.xgRealHomeAvg!=null?hAdv.xgRealHomeAvg:hAdv.xgRealAvg;
+    const aXG=aAdv.xgRealAwayAvg!=null?aAdv.xgRealAwayAvg:aAdv.xgRealAvg;
+    const h=Math.max(0.3,hXG),a=Math.max(0.2,aXG);
+    return{home:h,away:a,total:parseFloat((h+a).toFixed(2)),source:'real'};
+  }
   if(hAdv&&aAdv){
     // Use home/away specific shots when available
     const hShots=hAdv.shotsOnHomeAvg??hAdv.shotsOnAvg;
@@ -4513,6 +4553,8 @@ async function fetchAdvancedStats(name,tid,fixtures){
     let shotsOn=0,shotsTotal=0,possession=0,corners=0,fouls=0,yellowCards=0,n=0;
     let shotsOnHome=0,shotsOnAway=0,nHome=0,nAway=0;
     let cornersHome=0,cornersAway=0;
+    // #2b: xG real do feed (mesmo /fixtures/statistics) — type "expected_goals".
+    let xgReal=0,nXg=0,xgRealHome=0,nXgHome=0,xgRealAway=0,nXgAway=0;
     const toFetch=fixtures.slice(0,5); // Ultra — quota suficiente para 5 fixtures
     for(const f of toFetch){
       const fid=f.fixture?.id;if(!fid)continue;
@@ -4534,11 +4576,15 @@ async function fetchAdvancedStats(name,tid,fixtures){
         const corn=parseInt(s['Corner Kicks']||0)||0;
         const fl=parseInt(s['Fouls']||0)||0;
         const yc=parseInt(s['Yellow Cards']||0)||0;
+        const xgRaw=s['expected_goals']??s['Expected Goals'];
+        const xgv=(xgRaw!=null&&xgRaw!=='')?parseFloat(xgRaw):NaN;
+        const hasXg=Number.isFinite(xgv);
         shotsOn+=sOn;shotsTotal+=sTotal;possession+=poss;
         corners+=corn;fouls+=fl;yellowCards+=yc;n++;
+        if(hasXg){xgReal+=xgv;nXg++;}
         const isHome=f.teams?.home?.id===tid;
-        if(isHome){shotsOnHome+=sOn;cornersHome+=corn;nHome++;}
-        else{shotsOnAway+=sOn;cornersAway+=corn;nAway++;}
+        if(isHome){shotsOnHome+=sOn;cornersHome+=corn;nHome++;if(hasXg){xgRealHome+=xgv;nXgHome++;}}
+        else{shotsOnAway+=sOn;cornersAway+=corn;nAway++;if(hasXg){xgRealAway+=xgv;nXgAway++;}}
       }catch{}
     }
     if(n>0){
@@ -4555,6 +4601,11 @@ async function fetchAdvancedStats(name,tid,fixtures){
         yellowCardsAvg:parseFloat((yellowCards/n).toFixed(1)),
         games:n,
         xgFromShots:parseFloat(((shotsOn/n)*0.33).toFixed(2)),
+        // #2b: xG real médio (null se a liga não cobre). xgRealGames: nº de jogos medidos.
+        xgRealAvg:nXg>0?parseFloat((xgReal/nXg).toFixed(2)):null,
+        xgRealHomeAvg:nXgHome>0?parseFloat((xgRealHome/nXgHome).toFixed(2)):null,
+        xgRealAwayAvg:nXgAway>0?parseFloat((xgRealAway/nXgAway).toFixed(2)):null,
+        xgRealGames:nXg,
       };
     }
   }catch{}

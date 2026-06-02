@@ -77,6 +77,11 @@ A multi-layer client cache reduces API calls: `CACHE_KEY` (`betradar_cache_v32`)
 - It's one huge file — when changing logic, search for the function by name (`function <name>(`) rather than scrolling.
 - This is a **private tool**, so the public-compliance rules of blitztips (age gate, SRIJ badges, "no guaranteed wins") do **not** apply here.
 - Scoring logic mirrors the worker's (`calcConfidenceWorker`, Dixon-Coles). Keep client and worker definitions consistent when changing pick quality rules.
+- **Scoring is aligned with the worker's `calcConfidenceWorkerV2` (since 2026-06, the `#2`/`#2b` work).** `calcConfidence` reads more of the data it already caches:
+  - **Predictions** (component 8): scales `winPct` (>60→+2, >50→+1) and scores the `comparison` block (`pred.total`+`pred.attack`, already in `predCache`).
+  - **Real xG** (component 6): `fetchAdvancedStats` extracts `s['expected_goals']` into `advancedStatsCache.xgRealAvg`; `calcXG` prefers it (sample ≥2) over the `shotsOn*0.3` proxy. The xG→1X2/DC extension was already present here.
+  - **Lineups** (component 10): confirmed XI (`lineupCache`) + opponent depleted (`injuryCache`) → +1.
+  The EV cap and market logic are unchanged. Keep this in sync with the worker if either side changes its scoring. For public football the worker's `/tops` is authoritative; the client's local `calcConfidence` drives its own computed picks (incl. the sports the worker doesn't pre-compute).
 - Bump cache key versions (e.g. `betradar_cache_v32` → `v33`) when the cached data shape changes, to invalidate stale client caches.
 
 See also the worker repo (`betradar-worker`) and the public frontend (`blitztips`).
