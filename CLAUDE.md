@@ -36,6 +36,8 @@ Two ways the worker is used:
 
 API keys can be stored client-side in localStorage (`br_odds_key`, `br_form_key`, `br_anthropic_key`) when the owner wants to override them. `getFormKey()` intentionally has **no hardcoded default**: API-Sports requests go through the Worker proxy, which injects the `API_FOOTBALL_KEY` Worker secret when the browser does not provide `x-apisports-key`. The Anthropic key (`br_anthropic_key`) powers the optional AI analysis (`genAI()` / `runDeepAnalysis()`) and remains user-provided.
 
+**Security note (2026-06):** the old hardcoded API-Football key was removed from `index.html` and the key was rotated into the Worker secret. The Diagnostics panel should show `API-Football: via Worker secret` followed by `API-Football: Ultra | Activo`. If Diagnostics says "sem resposta válida" after deploy, first clear stale local keys/cache in the browser (`localStorage.removeItem('br_form_key')`, `localStorage.removeItem('br_odds_key')`, hard refresh) and verify the Worker proxy directly before re-adding any key to the client.
+
 The `SPORTS` array (~line 1784) lists ~80 football leagues by API-Football `lid`, plus `BBALL_LEAGUES`, `HOCKEY_LEAGUES`, `BASEBALL_LEAGUES`.
 
 ## Data flow
