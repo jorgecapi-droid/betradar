@@ -34,7 +34,7 @@ Two ways the worker is used:
 | `HOCKEY_BASE` | `v1.hockey.api-sports.io` | Ice hockey (NHL) |
 | `BASEBALL_BASE` | `v1.baseball.api-sports.io` | Baseball (MLB) |
 
-API keys are stored client-side in localStorage (`br_odds_key`, `br_form_key`, `br_anthropic_key`) — `getFormKey()` has a hardcoded default. The Anthropic key (`br_anthropic_key`) powers the optional AI analysis (`genAI()` / `runDeepAnalysis()`).
+API keys can be stored client-side in localStorage (`br_odds_key`, `br_form_key`, `br_anthropic_key`) when the owner wants to override them. `getFormKey()` intentionally has **no hardcoded default**: API-Sports requests go through the Worker proxy, which injects the `API_FOOTBALL_KEY` Worker secret when the browser does not provide `x-apisports-key`. The Anthropic key (`br_anthropic_key`) powers the optional AI analysis (`genAI()` / `runDeepAnalysis()`) and remains user-provided.
 
 The `SPORTS` array (~line 1784) lists ~80 football leagues by API-Football `lid`, plus `BBALL_LEAGUES`, `HOCKEY_LEAGUES`, `BASEBALL_LEAGUES`.
 

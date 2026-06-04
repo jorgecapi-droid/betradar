@@ -1262,7 +1262,7 @@
 // ── KEYS ─────────────────────────────────────────────────────────
 // ── API KEYS (configuráveis pelo utilizador) ──────────────────────
 function getOddsKey(){return localStorage.getItem('br_odds_key')||'';}
-function getFormKey(){return localStorage.getItem('br_form_key')||'c42c2185c426663295c344d27bbc41e3';}
+function getFormKey(){return localStorage.getItem('br_form_key')||'';}
 function getAnthropicKey(){return localStorage.getItem('br_anthropic_key')||'';}
 const ODDS_BASE='';// migrated to API-Football
 const FORM_BASE='https://v3.football.api-sports.io';
@@ -6870,7 +6870,7 @@ async function runDiagnostics(){
   el.innerHTML='<span style="color:var(--muted)">⏳ A testar APIs...</span>';
   const key=getFormKey();
   const lines=[];
-  lines.push(`🔑 Chave API: ${key?key.slice(0,8)+'...'+'('+key.length+' chars)':'❌ não definida'}`);
+  lines.push(`🔑 API-Football: ${key?key.slice(0,8)+'...'+'('+key.length+' chars)':'via Worker secret'}`);
 
   // Test API-Football
   try{
@@ -7946,7 +7946,7 @@ function resetApiKeys(){
   localStorage.removeItem('br_form_key');
   const fi=document.getElementById('set-form-key');if(fi)fi.value='';
   clearCache();
-  document.getElementById('keys-feedback').textContent='↩ Reposto para chave padrão.';
+  document.getElementById('keys-feedback').textContent='↩ Chave local removida. A app usa o secret do Worker.';
   setTimeout(()=>{document.getElementById('keys-feedback').textContent='';},3000);
 }
 function saveEvDefault(checked){
