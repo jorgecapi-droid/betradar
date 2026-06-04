@@ -5221,7 +5221,7 @@ function renderCard(pick,index,hf,af){
       ${noDataBadge}${lowConfBadgeHoje}${cornersRow}${advRow}${standingsRow}${xgRow}${h2hRow}${refRow}
       <div class="odds-row">
         <div class="bet-tag ${marketClass(pick.marketType)}">${pick.bet}</div>
-        <div class="odd-pill ${oddClass(pick.odd)}">${pick.isFriendly?'Sem odds':pick.noOdds?'📋 Sem odds':pick.isEstimated?`~${pick.odd.toFixed(2)} est.`:('@'+pick.odd.toFixed(2)+(pick.isCombo?' ~':''))}</div>
+        <div class="odd-pill ${oddClass(pick.odd)}">${pick.noOdds?'📋 Sem odds':pick.isEstimated?`~${pick.odd.toFixed(2)} est.`:('@'+pick.odd.toFixed(2)+(pick.isCombo?' ~':''))}</div>
         <div class="value-badge ${evClass}">${evStr}</div>
         ${hasDc?`<div class="value-badge ${evDcClass}" style="font-size:9px;opacity:.85;border-style:dashed;${dcDiverges?'box-shadow:0 0 0 1px rgba(245,200,66,.4);':''}" title="Dixon-Coles (modelo paralelo)${dcDiverges?' · diverge do EV principal':''}">${evDcStr}</div>`:''}
         <div class="prob-bar-wrap">
@@ -6354,7 +6354,7 @@ async function fetchFriendlies(){
           date:new Date(f.fixture.date).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),
           commence:f.fixture.date,leagueId:10,
           bet:'Sem odds disponíveis',marketType:'h2h',odd:0,prob:0,ev:0,confidence:0,
-          bookmakerOdds:[],rawProb:0,isFriendly:true,fixtureId:id,
+          bookmakerOdds:[],rawProb:0,isFriendly:true,noOdds:true,fixtureId:id,
         });
       }
     }
