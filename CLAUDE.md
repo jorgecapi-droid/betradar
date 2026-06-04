@@ -83,5 +83,6 @@ A multi-layer client cache reduces API calls: `CACHE_KEY` (`betradar_cache_v32`)
   - **Lineups** (component 10): confirmed XI (`lineupCache`) + opponent depleted (`injuryCache`) → +1.
   The EV cap and market logic are unchanged. Keep this in sync with the worker if either side changes its scoring. For public football the worker's `/tops` is authoritative; the client's local `calcConfidence` drives its own computed picks (incl. the sports the worker doesn't pre-compute).
 - Bump cache key versions (e.g. `betradar_cache_v32` → `v33`) when the cached data shape changes, to invalidate stale client caches.
+- **International friendlies (`fetchFriendlies`, league `10`):** this league uses **calendar-year** seasons (2026 friendlies → `season=2026`), unlike domestic leagues (2025-26 → `season=2025`). Use `new Date().getFullYear()` for the season here — the domestic `getMonth()<7?year-1:year` heuristic returns the wrong season and yields 0 fixtures. The function fetches real odds (`/odds?league=10` per date in today→tomorrow + Worker `/data` fallback) and runs them through `extractPicks`, so friendlies with odds become real picks; only odds-less games keep the `'Sem odds disponíveis'` placeholder. (Fixed 2026-06-04, commit `eacb72b`.)
 
 See also the worker repo (`betradar-worker`) and the public frontend (`blitztips`).
