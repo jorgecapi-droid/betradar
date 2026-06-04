@@ -6308,20 +6308,57 @@ async function fetchFriendlies(){
     const today=new Date().toISOString().slice(0,10);
     const tom=new Date();tom.setDate(tom.getDate()+1);
     const tomStr=tom.toISOString().slice(0,10);
-    // League 10 = International friendlies
-    const res=await apiFetch(`${FORM_BASE}/fixtures?league=10&season=${(new Date().getMonth()<7?new Date().getFullYear()-1:new Date().getFullYear())}&from=${today}&to=${tomStr}`,{headers:{'x-apisports-key':getFormKey()}});
+    // League 10 = International friendlies. Ao contrário das ligas domésticas
+    // (época 2025-26 → season 2025), a liga de amigáveis usa season por ANO CIVIL
+    // (amigáveis de 2026 → season 2026). Usar o ano civil corrente.
+    const season=new Date().getFullYear();
+    const headers={'x-apisports-key':getFormKey()};
+    const res=await apiFetch(`${FORM_BASE}/fixtures?league=10&season=${season}&from=${today}&to=${tomStr}`,{headers});
     const d=await res.json();
     const fixtures=d?.response||[];
-    // Convert to pick format — no odds available so use estimated odds from standings if possible
-    return fixtures.map(f=>({
-      home:f.teams.home.name,away:f.teams.away.name,
-      league:'Amigáveis Seleções 🌍',group:'soccer',icon:'🌍',
-      time:new Date(f.fixture.date).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}),
-      date:new Date(f.fixture.date).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),
-      commence:f.fixture.date,leagueId:10,
-      bet:'Sem odds disponíveis',marketType:'h2h',odd:0,prob:0,ev:0,confidence:0,
-      bookmakerOdds:[],rawProb:0,isFriendly:true,fixtureId:f.fixture.id,
-    }));
+    if(!fixtures.length)return[];
+
+    // Buscar odds das amigáveis (1 call por data distinta no intervalo).
+    const oddsMap={};
+    const dates=[...new Set([today,tomStr])];
+    for(const dt of dates){
+      try{
+        const ro=await apiFetch(`${FORM_BASE}/odds?league=10&season=${season}&date=${dt}&timezone=Europe/Lisbon`,{headers});
+        if(ro.ok){const od=await ro.json();(od?.response||[]).forEach(item=>{const id=item.fixture?.id;if(id)oddsMap[id]=item.bookmakers||[];});}
+      }catch{}
+    }
+    // Fallback: recuperar odds em falta do Worker (KV /data), tal como no loop principal.
+    const missing=fixtures.map(f=>f.fixture.id).filter(id=>!oddsMap[id]||!oddsMap[id].length);
+    if(missing.length){
+      try{
+        const wr=await fetch(`${WORKER_URL}/data`);
+        if(wr.ok){const wd=await wr.json();const miss=new Set(missing);(wd?.odds||[]).forEach(item=>{const fid=item.fixture?.id;if(fid&&miss.has(fid)&&item.bookmakers?.length)oddsMap[fid]=item.bookmakers;});}
+      }catch{}
+    }
+
+    const friendlySport={group:'soccer',icon:'🌍',label:'Amigáveis Seleções 🌍',lid:10};
+    const out=[];
+    for(const f of fixtures){
+      const id=f.fixture.id;
+      const home=f.teams.home.name,away=f.teams.away.name;
+      const bks=(oddsMap[id]&&oddsMap[id].length)?normalizeBookmakers(oddsMap[id],home,away):[];
+      if(bks.length){
+        const game={id:`af_${id}`,home_team:home,away_team:away,commence_time:f.fixture.date,homeLogo:f.teams.home.logo||'',awayLogo:f.teams.away.logo||'',leagueLogo:f.league?.logo||'',bookmakers:bks};
+        const picks=extractPicks(game,friendlySport).map(p=>({...p,isFriendly:true,fixtureId:id}));
+        out.push(...picks);
+      }else{
+        // Sem odds em lado nenhum — manter placeholder para o jogo continuar visível.
+        out.push({
+          home,away,league:'Amigáveis Seleções 🌍',group:'soccer',icon:'🌍',
+          time:new Date(f.fixture.date).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}),
+          date:new Date(f.fixture.date).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),
+          commence:f.fixture.date,leagueId:10,
+          bet:'Sem odds disponíveis',marketType:'h2h',odd:0,prob:0,ev:0,confidence:0,
+          bookmakerOdds:[],rawProb:0,isFriendly:true,fixtureId:id,
+        });
+      }
+    }
+    return out;
   }catch{return[];}
 }
 
