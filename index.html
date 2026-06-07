@@ -5466,7 +5466,7 @@ function addAllVisible(){
     if(idx===undefined)return;
     const pick=allGames[parseInt(idx)];
     if(!pick||pick.noOdds)return;
-    const fixtureId=upcomingFixtureCache[`${pick.home}|${pick.away}`]||null;
+    const fixtureId=pick?.fixtureId||upcomingFixtureCache[`${pick.home}|${pick.away}`]||null;
     addBet({id:Date.now().toString()+Math.random(),match:`${pick.home} vs ${pick.away}`,
       bet:pick.bet,odd:pick.odd,stake:10,league:pick.league,time:pick.time,date:pick.date,
       addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,
@@ -5484,7 +5484,7 @@ function addToBetslip(index,home,away,bet,odd,league,time,date,source='picks'){
   const key=`${home} vs ${away}|${bet}`;
   saveOddSnapshot(key,odd);
   const pick=allGames.find(g=>`${g.home} vs ${g.away}`===`${home} vs ${away}`&&g.bet===bet);
-  const fixtureId=upcomingFixtureCache[`${home}|${away}`]||null;
+  const fixtureId=pick?.fixtureId||upcomingFixtureCache[`${home}|${away}`]||null;
   addBet({id:Date.now().toString(),match:`${home} vs ${away}`,bet,odd,stake,league,time,date,
     addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,
     marketType:pick?.marketType||'h2h',group:pick?.group||'soccer',
