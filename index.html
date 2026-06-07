@@ -432,8 +432,9 @@
   .clear-btn:hover{background:rgba(255,71,87,.15);}
   #bet-history-list{display:flex;flex-direction:column;gap:8px;}
   .bet-row{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;animation:fadeUp .3s ease both;}
-  .bet-row.won{border-left:3px solid var(--accent);}.bet-row.lost{border-left:3px solid var(--red);}
-  .bet-row.pending{border-left:3px solid var(--gold);}
+.bet-row.won{border-left:3px solid var(--accent);}.bet-row.lost{border-left:3px solid var(--red);}
+.bet-row.pending{border-left:3px solid var(--gold);}
+.bet-row.void{border-left:3px solid var(--muted);}
   .bet-info{flex:1;min-width:160px;}
   .bet-match{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;}
   .bet-meta{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
@@ -465,9 +466,10 @@
   .rbtn.edit{background:transparent;border-color:var(--border2);color:var(--muted);padding:4px 8px;font-size:12px;}
   .rbtn.edit:hover{border-color:var(--accent3);color:var(--accent3);}
   .rbtn.pend{background:rgba(90,120,148,.1);border-color:rgba(90,120,148,.2);color:var(--muted);}
-  .status-pill{padding:3px 9px;border-radius:16px;font-size:10px;font-weight:600;}
-  .status-pill.won{background:rgba(0,229,160,.15);color:var(--accent);}
-  .status-pill.lost{background:rgba(255,71,87,.15);color:var(--red);}
+.status-pill{padding:3px 9px;border-radius:16px;font-size:10px;font-weight:600;}
+.status-pill.won{background:rgba(0,229,160,.15);color:var(--accent);}
+.status-pill.lost{background:rgba(255,71,87,.15);color:var(--red);}
+.status-pill.void{background:rgba(130,150,170,.12);color:var(--muted);}
   .chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:15px;margin-bottom:18px;}
   .chart-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;}
 
@@ -1422,7 +1424,7 @@ function setBankroll(){
 }
 function updateBankrollFromBets(){
   const bk=getBankroll();if(!bk)return;
-  const settled=loadHistory().filter(b=>b.result!=='pending');
+  const settled=loadHistory().filter(isSettledBet);
   const profit=settled.reduce((s,b)=>s+b.profit,0);
   bk.current=parseFloat((bk.initial+profit).toFixed(2));
   bk.max=Math.max(bk.max,bk.current);
@@ -2462,6 +2464,9 @@ function derivedMultipleResult(b){
   if(results.every(r=>r==='won'))return 'won';
   return 'pending';
 }
+function isSettledResult(r){return r==='won'||r==='lost';}
+function isSettledBet(b){return isSettledResult(b?.result);}
+function isActiveStakeBet(b){return b?.result!=='void';}
 function profitForResult(b,result){
   const stake=Number(b?.stake)||0;
   const odd=Number(b?.odd)||0;
@@ -2537,12 +2542,12 @@ function updateBet(id,result,auto=false){
     }
   }
   b.result=result;b.auto=auto;
-  b.profit=result==='won'?parseFloat(((b.odd-1)*b.stake).toFixed(2)):-parseFloat(b.stake.toFixed(2));
+  b.profit=profitForResult(b,result);
   saveHistory(h);updateBankrollFromBets();renderHistory();
   // Notificação
   if(auto){
-    const emoji=result==='won'?'✅':'❌';
-    const msg=result==='won'?`Ganhou +${b.profit.toFixed(2)}€!`:`Perdeu -${b.stake.toFixed(2)}€`;
+    const emoji=result==='won'?'✅':result==='lost'?'❌':'↩️';
+    const msg=result==='won'?`Ganhou +${b.profit.toFixed(2)}€!`:result==='lost'?`Perdeu -${b.stake.toFixed(2)}€`:'Sem dados oficiais suficientes — aposta marcada como nula';
     sendNotif(`${emoji} BetRadar — ${b.match}`,`${b.bet} @ ${b.odd.toFixed(2)} — ${msg}`);
     showToast(`${emoji} ${b.match} — ${msg}`);
   }
@@ -2559,6 +2564,7 @@ function editBetResult(id){
   el.innerHTML=`
     <button class="rbtn win" onclick="updateBet('${id}','won');renderHistory()">✅ Ganhou</button>
     <button class="rbtn loss" onclick="updateBet('${id}','lost');renderHistory()">❌ Perdeu</button>
+    <button class="rbtn pend" onclick="updateBet('${id}','void');renderHistory()">↩️ Sem dados</button>
     <button class="rbtn pend" onclick="updateBetPending('${id}')">⏳ Pendente</button>
   `;
 }
@@ -3075,7 +3081,14 @@ async function checkPendingResults(){
       else{
         // Bet could not be evaluated
         let reason='Avaliação falhou';
-        if(isCornersBetText(bet.bet))reason='Cantos: stats indisponíveis';
+        if(isCornersBetText(bet.bet)){
+          reason='Cantos: stats indisponíveis';
+          if(fid||bet.fixtureId){
+            updateBet(bet.id,'void',true);
+            updated++;
+            continue;
+          }
+        }
         else if(bet.bet.startsWith('HT '))reason='HT: intervalo não disponível';
         unresolved.push({bet:bet.bet,match:bet.match,reason});
       }
@@ -3338,7 +3351,7 @@ function widgetAdd(wid,home,away,bet,odd,league,time,date,source='top15',topRank
   const existing=loadHistory().find(h=>h.match===`${home} vs ${away}`&&h.bet===bet);
   if(existing){showToast('⚠️ Aposta já está no histórico');return;}
   const pick=allGames.find(g=>`${g.home} vs ${g.away}`===`${home} vs ${away}`&&g.bet===bet);
-  const fixtureId=upcomingFixtureCache[`${home}|${away}`]||null;
+  const fixtureId=pick?.fixtureId||upcomingFixtureCache[`${home}|${away}`]||null;
   addBet({id:Date.now().toString(),match:`${home} vs ${away}`,bet,odd,stake,league,time,date,
     addedAt:new Date().toISOString(),result:'pending',profit:0,auto:false,
     marketType:pick?.marketType||'h2h',group:pick?.group||'soccer',
@@ -4932,7 +4945,7 @@ async function fetchUpcomingFixtureId(homeTeam,awayTeam,lid){
 // ── ALGORITHM HELPERS ────────────────────────────────────────────
 // Check if this league has been losing money in the user's history
 function leagueHistoryWarning(league){
-  const h=loadHistory().filter(b=>b.result!=='pending'&&b.league===league);
+  const h=loadHistory().filter(b=>isSettledBet(b)&&b.league===league);
   if(h.length<15)return null;
   const staked=h.reduce((s,b)=>s+b.stake,0);
   const profit=h.reduce((s,b)=>s+b.profit,0);
@@ -5954,7 +5967,7 @@ const SRC_LABELS={
 };
 
 function renderDetailedStats(bets){
-  const settled=bets.filter(b=>b.result!=='pending');
+  const settled=bets.filter(isSettledBet);
   if(settled.length<2){
     document.getElementById('stats-league-section').style.display='none';
     document.getElementById('stats-market-section').style.display='none';
@@ -6127,8 +6140,8 @@ function renderHistory(){
   const bets=loadHistory();
   const won=bets.filter(b=>b.result==='won').length,lost=bets.filter(b=>b.result==='lost').length;
   const pending=bets.filter(needsResultCheck).length;
-  const staked=bets.reduce((s,b)=>s+b.stake,0);
-  const profit=bets.filter(b=>b.result!=='pending').reduce((s,b)=>s+b.profit,0);
+  const staked=bets.filter(isActiveStakeBet).reduce((s,b)=>s+b.stake,0);
+  const profit=bets.filter(isSettledBet).reduce((s,b)=>s+b.profit,0);
   const roi=staked>0?((profit/staked)*100):0;
   const settled=won+lost,wr=settled>0?Math.round((won/settled)*100):0;
   const avgOdd=bets.length>0?(bets.reduce((s,b)=>s+b.odd,0)/bets.length).toFixed(2):'—';
@@ -6190,12 +6203,12 @@ function renderHistory(){
   });
 
   const renderBet=(b)=>{
-    const pStr=b.result==='won'?`+${b.profit.toFixed(2)}€`:b.result==='lost'?`-${b.stake.toFixed(2)}€`:'pendente';
+    const pStr=b.result==='won'?`+${b.profit.toFixed(2)}€`:b.result==='lost'?`-${b.stake.toFixed(2)}€`:b.result==='void'?'sem dados':'pendente';
     const pCls=b.result==='won'?'pos':b.result==='lost'?'neg':'pend';
     const autoTag=b.auto?'<span class="bet-auto-tag">🤖 auto</span>':'';
     const rbtns=b.result==='pending'
       ?`<button class="rbtn win" onclick="updateBet('${b.id}','won')">✅ Ganhou</button><button class="rbtn loss" onclick="updateBet('${b.id}','lost')">❌ Perdeu</button>`
-      :`<span class="status-pill ${b.result}">${b.result==='won'?'✅ Ganhou':'❌ Perdeu'}</span>${autoTag}<button class="rbtn edit" onclick="editBetResult('${b.id}')" title="Corrigir">✏️</button>`;
+      :`<span class="status-pill ${b.result}">${b.result==='won'?'✅ Ganhou':b.result==='lost'?'❌ Perdeu':'↩️ Sem dados'}</span>${autoTag}<button class="rbtn edit" onclick="editBetResult('${b.id}')" title="Corrigir">✏️</button>`;
     const isMultiple=Array.isArray(b.legs)&&b.legs.length>0;
     const legsPanel=isMultiple?`<div class="bet-legs-panel" id="legs-${b.id}">${b.legs.map(l=>{
       const lr=l.result||'pending';
@@ -6288,7 +6301,7 @@ function drawChart(canvas,pts,colorPos,colorNeg){
 }
 
 function renderProfitChart(bets){
-  const settled=bets.filter(b=>b.result!=='pending').reverse();
+  const settled=bets.filter(isSettledBet).reverse();
   const wrap=document.getElementById('chart-wrap');if(settled.length<2){wrap.style.display='none';return;}
   wrap.style.display='block';
   let cum=0;const pts=settled.map(b=>{cum+=b.profit;return cum;});
@@ -6304,7 +6317,7 @@ function renderBankrollChart(bets){
   document.getElementById('bh-current').textContent=bk.current.toFixed(2)+'€';
   document.getElementById('bh-current').style.color=bk.current>=bk.initial?'var(--accent)':'var(--red)';
   document.getElementById('bh-max').textContent=bk.max.toFixed(2)+'€';
-  const settled=bets.filter(b=>b.result!=='pending').reverse();
+  const settled=bets.filter(isSettledBet).reverse();
   if(settled.length<2)return;
   let cum=bk.initial;const pts=[bk.initial,...settled.map(b=>{cum+=b.profit;return cum;})];
   drawChart(document.getElementById('bankroll-chart'),pts,'rgba(0,229,160,.2)','rgba(255,71,87,.2)');
@@ -6999,7 +7012,7 @@ function toggleFavFilter(){
 
 // ── MARKET ACERTO POR TIPO ────────────────────────────────────────
 function renderMarketAcerto(bets){
-  const settled=bets.filter(b=>b.result!=='pending');
+  const settled=bets.filter(isSettledBet);
   const sec=document.getElementById('market-acerto-section');
   const grid=document.getElementById('market-acerto-grid');
   if(settled.length<3){sec.style.display='none';return;}
@@ -8277,7 +8290,7 @@ function getForm(pick,isHome){
 // PART 1: Análise do histórico real
 function runAutoInsights(){
   const el=document.getElementById('auto-insights');
-  const all=loadHistory().filter(b=>b.result!=='pending');
+  const all=loadHistory().filter(isSettledBet);
   if(all.length<20){el.innerHTML='<div style="color:var(--muted);font-size:12px;">Precisas de pelo menos 20 apostas verificadas para obter insights úteis.</div>';return;}
 
   const insights=[];
@@ -8440,7 +8453,7 @@ function runAutoInsights(){
 
 function runHistoryBacktest(){
   const el=document.getElementById('bt-history-results');
-  const all=loadHistory().filter(b=>b.result!=='pending');
+  const all=loadHistory().filter(isSettledBet);
   if(all.length===0){el.innerHTML='<div style="color:var(--muted);font-size:12px;">Sem apostas verificadas no histórico ainda.</div>';return;}
 
   // By market

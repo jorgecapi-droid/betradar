@@ -59,6 +59,7 @@ A multi-layer client cache reduces API calls: `CACHE_KEY` (`betradar_cache_v32`)
 
 - History lives in localStorage `betradar_v2` (`loadHistory`/`saveHistory`, repaired by `repairHistory`).
 - `addBet` / `updateBet` / `deleteBet` / `editBetResult` manage entries; `checkPendingResults` / `checkPendingResultsSmart` auto-settle pending bets by re-checking fixtures.
+- Corner bets require API-Football `fixtures/statistics` to expose `Corner Kicks`. Many lower leagues finish with a final score but no corner statistics; when that happens for a single corner bet, auto-check marks it `void`/`Sem dados` (profit 0, not pending, excluded from winrate/ROI/acerto stats) instead of leaving it pending forever. Multiples with an unresolved corner leg remain pending because recalculating the accumulator odd after a void leg is not implemented.
 - Bankroll in `betradar_bankroll` (`BK_KEY`); `kellyStake()` suggests stakes; `renderDetailedStats` / `drawChart` / `renderProfitChart` / `renderBankrollChart` show performance.
 
 ## Key localStorage keys
