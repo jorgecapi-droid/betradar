@@ -1940,6 +1940,10 @@ let allGames=[],currentSport='all',currentRange='all',currentSort='score',curren
 let coveragePrefetchDone=false;
 const cornersCache={};
 const advancedStatsCache={}; // declarado aqui para loadPersistentCache poder aceder
+// Devolve as stats avançadas de uma equipa só quando há dados REAIS.
+// fetchAdvancedStats grava um sentinel {noData:true} para ligas sem cobertura
+// (ex: Botola devolve statistics:null) — esconde-o para nunca mostrarmos 0.0/0%/xG falso.
+function getAdvStats(name){const v=name?advancedStatsCache[`adv_${name}`]:null;return (v&&!v.noData)?v:null;}
 // Now load persistent analysis cache into the declared objects
 loadPersistentCache();
 let favLeagues=JSON.parse(localStorage.getItem('betradar_favleagues')||'[]');
@@ -2289,11 +2293,11 @@ function calcConfidence(pick, hf=[], af=[], hs=null, as_=null){
 
   // ── 7. DADOS DE CANTOS (0-3 pts) — só para mercado corners ──
   if(pick.marketType==='corners'){
-    const hAdv=advancedStatsCache[`adv_${pick.home}`];
-    const aAdv=advancedStatsCache[`adv_${pick.away}`];
-    if(hAdv&&aAdv&&hAdv.games>=2&&aAdv.games>=2){
-      const hAvg=hAdv.cornersHomeAvg??hAdv.cornersAvg;
-      const aAvg=aAdv.cornersAwayAvg??aAdv.cornersAvg;
+    const hAdv=getAdvStats(pick.home);
+    const aAdv=getAdvStats(pick.away);
+    const hAvg=hAdv?(hAdv.cornersHomeAvg??hAdv.cornersAvg):null;
+    const aAvg=aAdv?(aAdv.cornersAwayAvg??aAdv.cornersAvg):null;
+    if(hAdv&&aAdv&&hAdv.games>=2&&aAdv.games>=2&&hAvg!=null&&aAvg!=null){
       const expectedCorners=hAvg+aAvg;
       const line=parseFloat(pick.bet.match(/[\d.]+/)?.[0]||9);
       const diff=expectedCorners-line;
@@ -3492,8 +3496,8 @@ function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 // Baseado no modelo Dixon-Coles simplificado
 function calcXG(hs, as_, isHomePerspective, hName, aName){
   // Try shot-based xG first (more accurate)
-  const hAdv=hName?advancedStatsCache[`adv_${hName}`]:null;
-  const aAdv=aName?advancedStatsCache[`adv_${aName}`]:null;
+  const hAdv=getAdvStats(hName);
+  const aAdv=getAdvStats(aName);
   // #2b: xG REAL primeiro (mais fiável que o proxy de remates). Só com sample >=2 jogos.
   if(hAdv&&aAdv&&hAdv.xgRealAvg!=null&&aAdv.xgRealAvg!=null&&(hAdv.xgRealGames||0)>=2&&(aAdv.xgRealGames||0)>=2){
     const hXG=hAdv.xgRealHomeAvg!=null?hAdv.xgRealHomeAvg:hAdv.xgRealAvg;
@@ -3845,8 +3849,8 @@ function genAI(pick,hf,af,hs,as_){
   }
 
   // Advanced stats (remates, posse)
-  const hAdvStats=advancedStatsCache[`adv_${pick.home}`];
-  const aAdvStats=advancedStatsCache[`adv_${pick.away}`];
+  const hAdvStats=getAdvStats(pick.home);
+  const aAdvStats=getAdvStats(pick.away);
   if(hAdvStats&&aAdvStats){
     const hShots=hAdvStats.shotsOnHomeAvg??hAdvStats.shotsOnAvg;
     const aShots=aAdvStats.shotsOnAwayAvg??aAdvStats.shotsOnAvg;
@@ -3895,11 +3899,11 @@ function genAI(pick,hf,af,hs,as_){
   }
 
   // Cantos — usa advancedStatsCache (já vem do fetchAdvancedStats, sem chamadas extra)
-  const hCornAdv=advancedStatsCache[`adv_${pick.home}`];
-  const aCornAdv=advancedStatsCache[`adv_${pick.away}`];
-  if(hCornAdv&&aCornAdv&&pick.group==='soccer'){
-    const hAvg=parseFloat((hCornAdv.cornersAvg||0).toFixed(1));
-    const aAvg=parseFloat((aCornAdv.cornersAvg||0).toFixed(1));
+  const hCornAdv=getAdvStats(pick.home);
+  const aCornAdv=getAdvStats(pick.away);
+  if(hCornAdv&&aCornAdv&&pick.group==='soccer'&&hCornAdv.cornersAvg!=null&&aCornAdv.cornersAvg!=null){
+    const hAvg=parseFloat(hCornAdv.cornersAvg.toFixed(1));
+    const aAvg=parseFloat(aCornAdv.cornersAvg.toFixed(1));
     const total=(hAvg+aAvg).toFixed(1);
     lines.push(`🚩 Cantos estimados: ${pick.home} ${hAvg} + ${pick.away} ${aAvg} = ~${total}/jogo`);
     if(parseFloat(total)>=10)lines.push(`Jogo com tendência para muitos cantos`);
@@ -4590,8 +4594,13 @@ async function fetchAdvancedStats(name,tid,fixtures){
         const d=await res.json();
         const teamData=(d?.response||[]).find(t=>t.team?.id===tid);
         if(!teamData)continue;
+        const statArr=teamData.statistics||[];
+        // Ligas sem cobertura (ex: Botola) devolvem o array com todos os value:null.
+        // Sem este guard, parseInt(null||0) injeta zeros e poluímos as médias com dados falsos.
+        const hasRealStats=statArr.some(x=>x.value!=null&&x.value!=='');
+        if(!hasRealStats)continue;
         const s={};
-        (teamData.statistics||[]).forEach(x=>{s[x.type]=x.value;});
+        statArr.forEach(x=>{s[x.type]=x.value;});
         const sOn=parseInt(s['Shots on Goal']||0)||0;
         const sTotal=parseInt(s['Total Shots']||s['Shots on Goal']||0)||0;
         const poss=parseInt((s['Ball Possession']||'0%').replace('%',''))||0;
@@ -4629,6 +4638,10 @@ async function fetchAdvancedStats(name,tid,fixtures){
         xgRealAwayAvg:nXgAway>0?parseFloat((xgRealAway/nXgAway).toFixed(2)):null,
         xgRealGames:nXg,
       };
+    }else{
+      // Nenhum fixture trouxe estatísticas reais (liga sem cobertura).
+      // Grava sentinel para (a) não refazer o fetch e (b) o render mostrar estado honesto.
+      advancedStatsCache[key]={noData:true,games:0};
     }
   }catch{}
 }
@@ -5086,8 +5099,8 @@ function renderCard(pick,index,hf,af){
       ${(()=>{const s=detectSharpMoney(pick);return s&&s.signal==='sharp'?'<span style="font-size:9px;color:var(--accent);border:1px solid rgba(0,229,160,.2);border-radius:4px;padding:1px 6px;">📉 Smart money</span>':s&&s.signal==='fade'?'<span style="font-size:9px;color:var(--red);border:1px solid rgba(255,71,87,.2);border-radius:4px;padding:1px 6px;">📈 Mercado fugiu</span>':''})()}
     </div>`:'';
 
-  const hCornAdv=advancedStatsCache[`adv_${pick.home}`];
-  const aCornAdv=advancedStatsCache[`adv_${pick.away}`];
+  const hCornAdv=getAdvStats(pick.home);
+  const aCornAdv=getAdvStats(pick.away);
   const hCornVal=hCornAdv?(hCornAdv.cornersHomeAvg??hCornAdv.cornersAvg):null;
   const aCornVal=aCornAdv?(aCornAdv.cornersAwayAvg??aCornAdv.cornersAvg):null;
   const cornersRow=pick.group==='soccer'&&hCornAdv&&aCornAdv&&hCornVal!=null&&aCornVal!=null?`
@@ -5111,8 +5124,16 @@ function renderCard(pick,index,hf,af){
     </div>`:'';
 
   // Advanced stats row (remates, posse)
-  const hAdv=advancedStatsCache[`adv_${pick.home}`];
-  const aAdv=advancedStatsCache[`adv_${pick.away}`];
+  const hAdv=getAdvStats(pick.home);
+  const aAdv=getAdvStats(pick.away);
+  // Estado honesto: liga sem cobertura de estatísticas (sentinel noData) → badge em vez de 0.0/0%.
+  const hAdvRaw=advancedStatsCache[`adv_${pick.home}`];
+  const aAdvRaw=advancedStatsCache[`adv_${pick.away}`];
+  const statsNoData=pick.group==='soccer'&&((hAdvRaw&&hAdvRaw.noData)||(aAdvRaw&&aAdvRaw.noData));
+  const noStatsBadge=statsNoData?`
+    <div style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:9px;color:var(--muted);margin:3px 0;">
+      📊 Sem dados de estatística para esta liga
+    </div>`:'';
   const advRow=pick.group==='soccer'&&hAdv&&aAdv?`
     <div style="display:flex;gap:5px;align-items:center;margin:3px 0;flex-wrap:wrap;">
       <span style="font-size:9px;color:var(--muted);text-transform:uppercase;">📊 Stats:</span>
@@ -5240,7 +5261,7 @@ function renderCard(pick,index,hf,af){
           <div class="form-dots">${renderForm(af,true)}</div>
         </div>
       </div>
-      ${noDataBadge}${lowConfBadgeHoje}${cornersRow}${advRow}${standingsRow}${xgRow}${h2hRow}${refRow}
+      ${noDataBadge}${lowConfBadgeHoje}${cornersRow}${advRow}${noStatsBadge}${standingsRow}${xgRow}${h2hRow}${refRow}
       <div class="odds-row">
         <div class="bet-tag ${marketClass(pick.marketType)}">${pick.bet}</div>
         <div class="odd-pill ${oddClass(pick.odd)}">${pick.noOdds?'📋 Sem odds':pick.isEstimated?`~${pick.odd.toFixed(2)} est.`:('@'+pick.odd.toFixed(2)+(pick.isCombo?' ~':''))}</div>
@@ -5335,8 +5356,8 @@ async function runDeepAnalysis(index){
   const af=formCache[pick.away]||[];
   const hStats=teamStatsCache[getTid(pick.home)]||null;
   const aStats=teamStatsCache[getTid(pick.away)]||null;
-  const hAdv=advancedStatsCache[`adv_${pick.home}`]||null;
-  const aAdv=advancedStatsCache[`adv_${pick.away}`]||null;
+  const hAdv=getAdvStats(pick.home);
+  const aAdv=getAdvStats(pick.away);
   const h2hKey=`${getTid(pick.home)}_${getTid(pick.away)}`;
   const h2h=h2hCache[h2hKey]||null;
   const fid=upcomingFixtureCache[`${pick.home}|${pick.away}`]||null;
@@ -5373,8 +5394,8 @@ async function runDeepAnalysis(index){
     xg?`xG estimado: ${pick.home} ${xg.home} — ${pick.away} ${xg.away} (total ${xg.total})`:'',
     hSt?`Classificação ${pick.home}: ${hSt.pos}º | Casa: ${hDaTableRec?.w||0}V ${hDaTableRec?.d||0}E ${hDaTableRec?.l||0}D`:'',
     aSt?`Classificação ${pick.away}: ${aSt.pos}º | Fora: ${aDaTableRec?.w||0}V ${aDaTableRec?.d||0}E ${aDaTableRec?.l||0}D`:'',
-    hAdv?`${pick.home} stats: ${hAdv.shotsOnHomeAvg??hAdv.shotsOnAvg} remates/j | ${hAdv.possessionAvg}% posse | ${hAdv.cornersAvg} cantos/j | ${hAdv.cleanSheetRate?Math.round(hAdv.cleanSheetRate*100)+'% clean sheets':''}`:'' ,
-    aAdv?`${pick.away} stats: ${aAdv.shotsOnAwayAvg??aAdv.shotsOnAvg} remates/j | ${aAdv.possessionAvg}% posse | ${aAdv.cornersAvg} cantos/j | ${aAdv.cleanSheetRate?Math.round(aAdv.cleanSheetRate*100)+'% clean sheets':''}`:'' ,
+    hAdv?`${pick.home} stats: ${hAdv.shotsOnHomeAvg??hAdv.shotsOnAvg} remates/j | ${hAdv.possessionAvg}% posse | ${hAdv.cornersAvg!=null?hAdv.cornersAvg+' cantos/j | ':''}${hAdv.cleanSheetRate?Math.round(hAdv.cleanSheetRate*100)+'% clean sheets':''}`:'' ,
+    aAdv?`${pick.away} stats: ${aAdv.shotsOnAwayAvg??aAdv.shotsOnAvg} remates/j | ${aAdv.possessionAvg}% posse | ${aAdv.cornersAvg!=null?aAdv.cornersAvg+' cantos/j | ':''}${aAdv.cleanSheetRate?Math.round(aAdv.cleanSheetRate*100)+'% clean sheets':''}`:'' ,
     h2h&&h2h.total>=3?`H2H (${h2h.total} jogos): ${pick.home} ${h2h.team1wins}V ${h2h.draws}E ${h2h.team2wins}D | Média ${h2h.avgGoals} golos | Over2.5: ${Math.round(h2h.over25/h2h.total*100)}% | BTTS: ${Math.round(h2h.btts/h2h.total*100)}%`:'H2H: N/D',
     pred?`Previsão API: ${pred.winPct.home} casa / ${pred.winPct.draw} empate / ${pred.winPct.away} fora | Golos esperados: ${pred.goals?.home??'?'}-${pred.goals?.away??'?'}`:'',
     pred?.attack?`Força ataque: ${pick.home} ${pred.attack.home} vs ${pick.away} ${pred.attack.away} | Defesa: ${pick.home} ${pred.defense?.home} vs ${pick.away} ${pred.defense?.away}`:'',
