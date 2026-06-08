@@ -1,0 +1,1581 @@
+{
+  "generatedAt": "2026-06-08T11:37:14.354Z",
+  "days": 14,
+  "sample": 5,
+  "rows": [
+    {
+      "lid": 71,
+      "label": "Brasileirão 🇧🇷",
+      "finishedFound": 2,
+      "checked": 2,
+      "complete": 2,
+      "partial": 0,
+      "completeRate": 1,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1492287,
+          "match": "Remo vs Sao Paulo",
+          "date": "2026-06-01T00:30:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 13
+        },
+        {
+          "fixtureId": 1492283,
+          "match": "Cruzeiro vs Fluminense",
+          "date": "2026-06-01T00:30:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 9
+        }
+      ]
+    },
+    {
+      "lid": 141,
+      "label": "La Liga 2 🇪🇸",
+      "finishedFound": 2,
+      "checked": 2,
+      "complete": 2,
+      "partial": 0,
+      "completeRate": 1,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1548053,
+          "match": "Las Palmas vs Malaga",
+          "date": "2026-06-07T20:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 6
+        },
+        {
+          "fixtureId": 1548052,
+          "match": "Castellón vs Almeria",
+          "date": "2026-06-06T20:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 8
+        }
+      ]
+    },
+    {
+      "lid": 345,
+      "label": "Fortuna Liga 🇨🇿",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 1,
+      "partial": 0,
+      "completeRate": 1,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1546286,
+          "match": "Artis vs Slovácko",
+          "date": "2026-05-27T17:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 9
+        }
+      ]
+    },
+    {
+      "lid": 283,
+      "label": "Liga 1 Roménia 🇷🇴",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 1,
+      "partial": 0,
+      "completeRate": 1,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1545548,
+          "match": "FC Voluntari vs AFC Hermannstadt",
+          "date": "2026-06-01T18:30:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 10
+        }
+      ]
+    },
+    {
+      "lid": 265,
+      "label": "Primera División 🇨🇱",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 1,
+      "partial": 0,
+      "completeRate": 1,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1505456,
+          "match": "Palestino vs A. Italiano",
+          "date": "2026-06-01T01:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 13
+        }
+      ]
+    },
+    {
+      "lid": 242,
+      "label": "Liga Pro Equador 🇪🇨",
+      "finishedFound": 3,
+      "checked": 3,
+      "complete": 2,
+      "partial": 0,
+      "completeRate": 0.6666666666666666,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1519383,
+          "match": "Tecnico Universitario vs Barcelona SC",
+          "date": "2026-06-02T01:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1519383"
+        },
+        {
+          "fixtureId": 1519380,
+          "match": "Leones del Norte vs Macara",
+          "date": "2026-06-01T23:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 8
+        },
+        {
+          "fixtureId": 1519377,
+          "match": "Emelec vs Universidad Catolica",
+          "date": "2026-06-01T00:10:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 7
+        }
+      ]
+    },
+    {
+      "lid": 233,
+      "label": "Premier League 🇪🇬",
+      "finishedFound": 3,
+      "checked": 3,
+      "complete": 2,
+      "partial": 0,
+      "completeRate": 0.6666666666666666,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1533657,
+          "match": "El Geish vs Wadi Degla",
+          "date": "2026-05-28T15:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1533657"
+        },
+        {
+          "fixtureId": 1533661,
+          "match": "Ismaily SC vs Pharco",
+          "date": "2026-05-28T15:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 3
+        },
+        {
+          "fixtureId": 1533663,
+          "match": "Petrojet vs El Gouna FC",
+          "date": "2026-05-28T15:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 9
+        }
+      ]
+    },
+    {
+      "lid": 13,
+      "label": "Libertadores 🌎",
+      "finishedFound": 12,
+      "checked": 5,
+      "complete": 3,
+      "partial": 0,
+      "completeRate": 0.6,
+      "grade": "maioria",
+      "samples": [
+        {
+          "fixtureId": 1535316,
+          "match": "Cerro Porteno vs Sporting Cristal",
+          "date": "2026-05-28T23:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 7
+        },
+        {
+          "fixtureId": 1535315,
+          "match": "Bolívar vs Independ. Rivadavia",
+          "date": "2026-05-28T01:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535315"
+        },
+        {
+          "fixtureId": 1535327,
+          "match": "Palmeiras vs Junior",
+          "date": "2026-05-28T23:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 7
+        },
+        {
+          "fixtureId": 1535317,
+          "match": "Corinthians vs Platense",
+          "date": "2026-05-28T01:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535317"
+        },
+        {
+          "fixtureId": 1535321,
+          "match": "Fluminense vs Deportivo La Guaira",
+          "date": "2026-05-28T01:30:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 3
+        }
+      ]
+    },
+    {
+      "lid": 98,
+      "label": "J-League 🇯🇵",
+      "finishedFound": 10,
+      "checked": 5,
+      "complete": 2,
+      "partial": 0,
+      "completeRate": 0.4,
+      "grade": "fraco",
+      "samples": [
+        {
+          "fixtureId": 1546407,
+          "match": "Kawasaki Frontale vs Sanfrecce Hiroshima",
+          "date": "2026-06-06T11:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546407"
+        },
+        {
+          "fixtureId": 1546406,
+          "match": "Kashiwa Reysol vs Kyoto Sanga",
+          "date": "2026-06-06T10:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546406"
+        },
+        {
+          "fixtureId": 1546405,
+          "match": "Yokohama F. Marinos vs Shimizu S-pulse",
+          "date": "2026-06-06T09:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546405"
+        },
+        {
+          "fixtureId": 1546403,
+          "match": "Urawa vs Fagiano Okayama",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 9
+        },
+        {
+          "fixtureId": 1546404,
+          "match": "Tokyo Verdy vs Gamba Osaka",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 5
+        }
+      ]
+    },
+    {
+      "lid": 72,
+      "label": "Serie B Brasil 🇧🇷",
+      "finishedFound": 5,
+      "checked": 5,
+      "complete": 2,
+      "partial": 0,
+      "completeRate": 0.4,
+      "grade": "fraco",
+      "samples": [
+        {
+          "fixtureId": 1520712,
+          "match": "CRB vs São Bernardo",
+          "date": "2026-06-07T20:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1520712"
+        },
+        {
+          "fixtureId": 1520713,
+          "match": "Criciuma vs Londrina",
+          "date": "2026-06-06T15:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1520713"
+        },
+        {
+          "fixtureId": 1520716,
+          "match": "Operario-PR vs Juventude",
+          "date": "2026-06-06T00:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1520716"
+        },
+        {
+          "fixtureId": 1520707,
+          "match": "Ponte Preta vs Botafogo SP",
+          "date": "2026-06-01T23:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 17
+        },
+        {
+          "fixtureId": 1520704,
+          "match": "Cuiaba vs CRB",
+          "date": "2026-06-01T00:30:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 11
+        }
+      ]
+    },
+    {
+      "lid": 10,
+      "label": "Amigáveis Seleções 🌍",
+      "finishedFound": 129,
+      "checked": 5,
+      "complete": 1,
+      "partial": 0,
+      "completeRate": 0.2,
+      "grade": "fraco",
+      "samples": [
+        {
+          "fixtureId": 1550823,
+          "match": "Sweden U19 vs Wales U19",
+          "date": "2026-06-08T10:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1528288,
+          "match": "Colombia vs Jordan",
+          "date": "2026-06-08T00:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1528288"
+        },
+        {
+          "fixtureId": 1550822,
+          "match": "Albania U17 vs Bulgaria U17",
+          "date": "2026-06-08T09:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1542182,
+          "match": "Ecuador vs Guatemala",
+          "date": "2026-06-07T21:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1542182"
+        },
+        {
+          "fixtureId": 1540590,
+          "match": "Greece vs Italy",
+          "date": "2026-06-07T20:00:00+01:00",
+          "complete": true,
+          "partial": true,
+          "total": 5
+        }
+      ]
+    },
+    {
+      "lid": 200,
+      "label": "Botola Pro 🇲🇦",
+      "finishedFound": 6,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1545541,
+          "match": "Raja Casablanca vs Renaissance Berkane",
+          "date": "2026-06-03T21:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1545541"
+        },
+        {
+          "fixtureId": 1545540,
+          "match": "Ittihad Tanger vs Wydad AC",
+          "date": "2026-06-03T19:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1545540"
+        },
+        {
+          "fixtureId": 1545539,
+          "match": "CR Khemis Zemamra vs Yacoub El Mansour",
+          "date": "2026-06-03T17:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1545539"
+        },
+        {
+          "fixtureId": 1545538,
+          "match": "CODM Meknès vs Olympique Dcheïra",
+          "date": "2026-06-01T21:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1545538"
+        },
+        {
+          "fixtureId": 1545537,
+          "match": "Olympique Safi vs Maghreb Fès",
+          "date": "2026-06-01T19:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        }
+      ]
+    },
+    {
+      "lid": 11,
+      "label": "Copa Sudamericana 🌎",
+      "finishedFound": 10,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1535220,
+          "match": "RB Bragantino vs Carabobo FC",
+          "date": "2026-05-28T01:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535220"
+        },
+        {
+          "fixtureId": 1535228,
+          "match": "River Plate vs Blooming",
+          "date": "2026-05-28T01:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535228"
+        },
+        {
+          "fixtureId": 1535219,
+          "match": "Atletico-MG vs Puerto Cabello",
+          "date": "2026-05-27T23:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535219"
+        },
+        {
+          "fixtureId": 1535221,
+          "match": "Caracas FC vs Botafogo",
+          "date": "2026-05-27T23:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535221"
+        },
+        {
+          "fixtureId": 1535222,
+          "match": "Cienciano vs Juventud",
+          "date": "2026-05-27T23:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1535222"
+        }
+      ]
+    },
+    {
+      "lid": 192,
+      "label": "New South Wales NPL 🇦🇺",
+      "finishedFound": 8,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1517560,
+          "match": "Marconi Stallions vs Wollongong Wolves",
+          "date": "2026-06-07T06:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1517560"
+        },
+        {
+          "fixtureId": 1517561,
+          "match": "Blacktown City vs Rockdale City Suns",
+          "date": "2026-06-07T06:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1517561"
+        },
+        {
+          "fixtureId": 1517559,
+          "match": "St George City FA vs Sydney Olympic",
+          "date": "2026-06-06T10:15:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1517558,
+          "match": "St. George Saints vs Sutherland Sharks",
+          "date": "2026-06-06T09:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1517558"
+        },
+        {
+          "fixtureId": 1517557,
+          "match": "APIA Leichhardt Tigers vs Manly United",
+          "date": "2026-06-06T09:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1517557"
+        }
+      ]
+    },
+    {
+      "lid": 268,
+      "label": "Primera División Uruguai 🇺🇾",
+      "finishedFound": 9,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1546811,
+          "match": "Defensor Sporting vs Boston River",
+          "date": "2026-06-07T22:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1546808,
+          "match": "Club Nacional vs Juventud",
+          "date": "2026-06-06T22:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546808"
+        },
+        {
+          "fixtureId": 1546810,
+          "match": "Cerro vs Penarol",
+          "date": "2026-06-07T19:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546810"
+        },
+        {
+          "fixtureId": 1546809,
+          "match": "Progreso vs Albion FC",
+          "date": "2026-06-07T14:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1546807,
+          "match": "Atletico Torque vs Deportivo Maldonado",
+          "date": "2026-06-06T19:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        }
+      ]
+    },
+    {
+      "lid": 129,
+      "label": "Primera Nacional 🇦🇷",
+      "finishedFound": 17,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1498591,
+          "match": "San Martin Tucuman vs Quilmes",
+          "date": "2026-06-07T21:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1498591"
+        },
+        {
+          "fixtureId": 1498585,
+          "match": "Colon Santa Fe vs Ciudad de Bolívar",
+          "date": "2026-06-07T21:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1498588,
+          "match": "Godoy Cruz vs Atletico Mitre",
+          "date": "2026-06-07T20:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1498588"
+        },
+        {
+          "fixtureId": 1498578,
+          "match": "Agropecuario vs Patronato",
+          "date": "2026-06-07T20:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1498578"
+        },
+        {
+          "fixtureId": 1498583,
+          "match": "Chaco For Ever vs Ferro Carril Oeste",
+          "date": "2026-06-07T20:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        }
+      ]
+    },
+    {
+      "lid": 195,
+      "label": "Victoria NPL 🇦🇺",
+      "finishedFound": 6,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1521955,
+          "match": "South Melbourne vs Altona Magic",
+          "date": "2026-06-07T06:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1521954,
+          "match": "Dandenong Thunder vs Sunshine Georgies",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1521953,
+          "match": "Bentleigh Greens vs Hume City",
+          "date": "2026-06-05T11:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1521952,
+          "match": "Oakleigh Cannons vs St. Albans Saints",
+          "date": "2026-06-05T11:15:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1521951,
+          "match": "Dandenong City vs Heidelberg United",
+          "date": "2026-06-05T10:45:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1521951"
+        }
+      ]
+    },
+    {
+      "lid": 196,
+      "label": "Western Australia NPL 🇦🇺",
+      "finishedFound": 6,
+      "checked": 5,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1527206,
+          "match": "Perth Glory II vs Olympic Kingsway",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1527208,
+          "match": "Balcatta vs Sorrento",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1527207,
+          "match": "Perth RedStar vs Western Knights",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1527207"
+        },
+        {
+          "fixtureId": 1527209,
+          "match": "Armadale vs Fremantle City",
+          "date": "2026-06-06T08:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1527209"
+        },
+        {
+          "fixtureId": 1527204,
+          "match": "Bayswater City vs Dianella White Eagle",
+          "date": "2026-06-05T12:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1527204"
+        }
+      ]
+    },
+    {
+      "lid": 333,
+      "label": "Premier League Ucrânia 🇺🇦",
+      "finishedFound": 2,
+      "checked": 2,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1547738,
+          "match": "Kudrivka vs Ahrobiznes Volochysk",
+          "date": "2026-06-05T16:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1548187,
+          "match": "Oleksandria vs Livyi Bereh",
+          "date": "2026-06-05T13:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        }
+      ]
+    },
+    {
+      "lid": 288,
+      "label": "Premiership 🇿🇦",
+      "finishedFound": 2,
+      "checked": 2,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1546280,
+          "match": "Milford FC vs Cape Town City",
+          "date": "2026-06-06T14:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        },
+        {
+          "fixtureId": 1546279,
+          "match": "Milford FC vs Magesi",
+          "date": "2026-06-03T14:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546279"
+        }
+      ]
+    },
+    {
+      "lid": 848,
+      "label": "Conference League",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1544608,
+          "match": "Crystal Palace vs Rayo Vallecano",
+          "date": "2026-05-27T20:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1544608"
+        }
+      ]
+    },
+    {
+      "lid": 130,
+      "label": "Copa Argentina 🇦🇷",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1540052,
+          "match": "Barracas Central vs Huracan",
+          "date": "2026-06-03T01:10:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        }
+      ]
+    },
+    {
+      "lid": 172,
+      "label": "First League Bulgária 🇧🇬",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1546312,
+          "match": "Septemvri Sofia vs Yantra 2019",
+          "date": "2026-05-28T15:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546312"
+        }
+      ]
+    },
+    {
+      "lid": 239,
+      "label": "Liga BetPlay 🇨🇴",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1546412,
+          "match": "Junior vs Atletico Nacional",
+          "date": "2026-06-03T01:30:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1546412"
+        }
+      ]
+    },
+    {
+      "lid": 299,
+      "label": "Liga FUTVE Venezuela 🇻🇪",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1548335,
+          "match": "Carabobo FC vs Puerto Cabello",
+          "date": "2026-06-07T23:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "total": null
+        }
+      ]
+    },
+    {
+      "lid": 94,
+      "label": "Liga Portugal 🇵🇹",
+      "finishedFound": 1,
+      "checked": 1,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem cantos",
+      "samples": [
+        {
+          "fixtureId": 1545404,
+          "match": "Casa Pia vs Torreense",
+          "date": "2026-05-28T20:00:00+01:00",
+          "complete": false,
+          "partial": false,
+          "error": "API errors {\"rateLimit\":\"Too many requests. You have exceeded the limit of requests per minute of your subscription.\"} /fixtures/statistics?fixture=1545404"
+        }
+      ]
+    },
+    {
+      "lid": 79,
+      "label": "2. Bundesliga 🇩🇪",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 188,
+      "label": "A-League 🇦🇺",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 19,
+      "label": "African Nations Championship 🌍",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 113,
+      "label": "Allsvenskan 🇸🇪",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 250,
+      "label": "Apertura Paraguai 🇵🇾",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 78,
+      "label": "Bundesliga 🇩🇪",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 218,
+      "label": "Bundesliga Áustria 🇦🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 6,
+      "label": "CAN África",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 2,
+      "label": "Champions League 🏆",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 40,
+      "label": "Championship 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 252,
+      "label": "Clausura Paraguai 🇵🇾",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 9,
+      "label": "Copa América",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 73,
+      "label": "Copa do Brasil 🇧🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 137,
+      "label": "Coppa Italia 🇮🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 285,
+      "label": "Cupa României 🇷🇴",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 106,
+      "label": "Ekstraklasa 🇵🇱",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 103,
+      "label": "Eliteserien 🇳🇴",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 88,
+      "label": "Eredivisie 🇳🇱",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 3,
+      "label": "Europa League 🇪🇺",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 4,
+      "label": "Europeu UEFA",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 45,
+      "label": "FA Cup 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 210,
+      "label": "HNL Croácia 🇭🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 292,
+      "label": "K-League 🇰🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 140,
+      "label": "La Liga 🇪🇸",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 357,
+      "label": "League of Ireland 🇮🇪",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 281,
+      "label": "Liga 1 Peru 🇵🇪",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 865,
+      "label": "Liga 3 🇵🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 262,
+      "label": "Liga MX 🇲🇽",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 95,
+      "label": "Liga Portugal 2 🇵🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 61,
+      "label": "Ligue 1 🇫🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 62,
+      "label": "Ligue 2 Betclic 🇫🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 253,
+      "label": "MLS 🇺🇸",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 1,
+      "label": "Mundial FIFA",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 193,
+      "label": "Northern Territory NPL 🇦🇺",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 271,
+      "label": "OTP Bank Liga 🇭🇺",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 39,
+      "label": "Premier League 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 383,
+      "label": "Premier League Israel 🇮🇱",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 179,
+      "label": "Premiership 🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 240,
+      "label": "Primera B Colômbia 🇨🇴",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 128,
+      "label": "Primera División 🇦🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 144,
+      "label": "Pro League 🇧🇪",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 960,
+      "label": "Qualif. Euro UEFA",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 34,
+      "label": "Qualif. Mundial CONMEBOL",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 32,
+      "label": "Qualif. Mundial Europa",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 307,
+      "label": "Saudi Pro League 🇸🇦",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 135,
+      "label": "Serie A 🇮🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 169,
+      "label": "Super League 🇨🇳",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 197,
+      "label": "Super League Grécia 🇬🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 207,
+      "label": "Super League Suíça 🇨🇭",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 203,
+      "label": "Süper Lig 🇹🇷",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 332,
+      "label": "Super Liga Eslováquia 🇸🇰",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 119,
+      "label": "Superliga Dinamarca 🇩🇰",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 97,
+      "label": "Taça da Liga 🇵🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 96,
+      "label": "Taça de Portugal 🇵🇹",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 48,
+      "label": "Taça EFL 🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 5,
+      "label": "UEFA Nations League",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 164,
+      "label": "Úrvalsdeild 🇮🇸",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    },
+    {
+      "lid": 244,
+      "label": "Veikkausliiga 🇫🇮",
+      "finishedFound": 0,
+      "checked": 0,
+      "complete": 0,
+      "partial": 0,
+      "completeRate": 0,
+      "grade": "sem amostra",
+      "samples": []
+    }
+  ]
+}
