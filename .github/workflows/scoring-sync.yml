@@ -1,0 +1,28 @@
+name: Scoring Sync
+
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'scripts/sync-scoring.mjs']
+  pull_request:
+    paths: ['index.html', 'scripts/sync-scoring.mjs']
+  workflow_dispatch: {}
+
+jobs:
+  scoring-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout betradar
+        uses: actions/checkout@v6
+        with:
+          path: betradar
+      - name: Checkout worker scoring source
+        uses: actions/checkout@v6
+        with:
+          repository: jorgecapi-droid/betradar-worker
+          path: betradar-worker
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - name: Check synced scoring block
+        run: node betradar/scripts/sync-scoring.mjs --check --html betradar/index.html --source betradar-worker/scoring.mjs

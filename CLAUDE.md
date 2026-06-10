@@ -62,6 +62,17 @@ A multi-layer client cache reduces API calls: `CACHE_KEY` (`betradar_cache_v32`)
 
 `top15`, `h2h` (1X2), `totals` (O/U), `btts`, `dc`, `ah` (Handicap 2-way, worker `tops.ah`), `combo` (DC+), `corners`, `ht` (Half-time). Also: Tomorrow view (`renderTomorrow`), a betslip widget (`renderWidget`/`widgetAdd`), multiples/accumulators (`generateMultiples`, `buildMultiplesFromTops`), and a history/bankroll section.
 
+## Synced scoring block
+
+`index.html` contains a generated block marked `SYNC scoring.mjs`; do **not** edit that block by hand. It is generated from `../betradar-worker/scoring.mjs` by:
+
+```
+node scripts/sync-scoring.mjs --apply
+node scripts/sync-scoring.mjs --check
+```
+
+The block is namespaced as `window.WorkerScoring` because this client has global functions with different contracts (notably `normalizeBookmakers`, which returns bookmaker-market objects locally while the worker version returns final picks). First consumer: `fetchFriendlies` uses `window.WorkerScoring.normalizeBookmakers` through an adapter and falls back to the old local path if unavailable. The client's `calcConfidence` remains intentionally different.
+
 ## Betting history & bankroll (client-side only)
 
 - History lives in localStorage `betradar_v2` (`loadHistory`/`saveHistory`, repaired by `repairHistory`).

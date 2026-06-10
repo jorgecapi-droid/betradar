@@ -3969,6 +3969,571 @@ function genSite(pick,hf,af){
   return{r:'—',t:`EV negativo (${ev}%). Mercado não dá valor — considera outras opções.`};
 }
 
+// ⇩ SYNC scoring.mjs (canónico: betradar-worker/scoring.mjs) ⇩
+window.WorkerScoring = (() => {
+  function calculateDixonColes(homeForm, awayForm, leagueAvg, rho = -0.12) {
+    if (!homeForm || !awayForm || !leagueAvg) return null;
+    if (!leagueAvg.homeGoalsAvg || !leagueAvg.awayGoalsAvg) return null;
+
+    const hAttack = (homeForm.attackAvgHome > 0 ? homeForm.attackAvgHome : homeForm.attackAvg) || leagueAvg.homeGoalsAvg;
+    const hDef = (homeForm.defenseAvgHome > 0 ? homeForm.defenseAvgHome : homeForm.defenseAvg) || leagueAvg.awayGoalsAvg;
+    const aAttack = (awayForm.attackAvgAway > 0 ? awayForm.attackAvgAway : awayForm.attackAvg) || leagueAvg.awayGoalsAvg;
+    const aDef = (awayForm.defenseAvgAway > 0 ? awayForm.defenseAvgAway : awayForm.defenseAvg) || leagueAvg.homeGoalsAvg;
+
+    const hAtkStr = hAttack / leagueAvg.homeGoalsAvg;
+    const hDefStr = hDef / leagueAvg.awayGoalsAvg;
+    const aAtkStr = aAttack / leagueAvg.awayGoalsAvg;
+    const aDefStr = aDef / leagueAvg.homeGoalsAvg;
+
+    let lH = hAtkStr * aDefStr * leagueAvg.homeGoalsAvg;
+    let lA = aAtkStr * hDefStr * leagueAvg.awayGoalsAvg;
+    lH = Math.max(0.1, Math.min(5, lH));
+    lA = Math.max(0.1, Math.min(5, lA));
+
+    const fact = [1, 1, 2, 6, 24, 120, 720, 5040];
+    const poi = (k, lam) => Math.exp(-lam) * Math.pow(lam, k) / fact[k];
+
+    const tau = (i, j) => {
+      if (i === 0 && j === 0) return 1 - lH * lA * rho;
+      if (i === 0 && j === 1) return 1 + lH * rho;
+      if (i === 1 && j === 0) return 1 + lA * rho;
+      if (i === 1 && j === 1) return 1 - rho;
+      return 1;
+    };
+
+    const MAX = 6;
+    const M = [];
+    let totalProb = 0;
+    for (let i = 0; i <= MAX; i++) {
+      M[i] = [];
+      for (let j = 0; j <= MAX; j++) {
+        const p = tau(i, j) * poi(i, lH) * poi(j, lA);
+        M[i][j] = p;
+        totalProb += p;
+      }
+    }
+    for (let i = 0; i <= MAX; i++) {
+      for (let j = 0; j <= MAX; j++) M[i][j] /= totalProb;
+    }
+
+    let pHome = 0, pDraw = 0, pAway = 0, pOver25 = 0, pBtts = 0;
+    let p1X = 0, pX2 = 0, p12 = 0;
+    let p1XOver = 0, p1XUnder = 0, pX2Over = 0, pX2Under = 0, p12Over = 0, p12Under = 0;
+    let p1XBtts = 0, p1XNoBtts = 0, pX2Btts = 0, pX2NoBtts = 0, p12Btts = 0, p12NoBtts = 0;
+
+    for (let i = 0; i <= MAX; i++) {
+      for (let j = 0; j <= MAX; j++) {
+        const p = M[i][j];
+        const over = (i + j) > 2.5;
+        const btts = i > 0 && j > 0;
+        if (i > j) pHome += p;
+        else if (i < j) pAway += p;
+        else pDraw += p;
+        if (over) pOver25 += p;
+        if (btts) pBtts += p;
+        if (i >= j) {
+          p1X += p;
+          if (over) p1XOver += p; else p1XUnder += p;
+          if (btts) p1XBtts += p; else p1XNoBtts += p;
+        }
+        if (i <= j) {
+          pX2 += p;
+          if (over) pX2Over += p; else pX2Under += p;
+          if (btts) pX2Btts += p; else pX2NoBtts += p;
+        }
+        if (i !== j) {
+          p12 += p;
+          if (over) p12Over += p; else p12Under += p;
+          if (btts) p12Btts += p; else p12NoBtts += p;
+        }
+      }
+    }
+    return {
+      lambdaH: +lH.toFixed(2),
+      lambdaA: +lA.toFixed(2),
+      pHome: +pHome.toFixed(3), pDraw: +pDraw.toFixed(3), pAway: +pAway.toFixed(3),
+      pOver25: +pOver25.toFixed(3), pUnder25: +(1 - pOver25).toFixed(3),
+      pBtts: +pBtts.toFixed(3), pNoBtts: +(1 - pBtts).toFixed(3),
+      p1X: +p1X.toFixed(3), pX2: +pX2.toFixed(3), p12: +p12.toFixed(3),
+      p1XOver: +p1XOver.toFixed(3), p1XUnder: +p1XUnder.toFixed(3),
+      pX2Over: +pX2Over.toFixed(3), pX2Under: +pX2Under.toFixed(3),
+      p12Over: +p12Over.toFixed(3), p12Under: +p12Under.toFixed(3),
+      p1XBtts: +p1XBtts.toFixed(3), p1XNoBtts: +p1XNoBtts.toFixed(3),
+      pX2Btts: +pX2Btts.toFixed(3), pX2NoBtts: +pX2NoBtts.toFixed(3),
+      p12Btts: +p12Btts.toFixed(3), p12NoBtts: +p12NoBtts.toFixed(3),
+    };
+  }
+
+  // Handicap 2-way (asiático), SÓ meias-linhas (.5) — settlement binário, sem push
+  // nem half-win. `homeLine` é o handicap aplicado à equipa da casa (ex.: -1.5 →
+  // a casa dá 1.5 golos). Reconstrói a matriz Dixon-Coles a partir dos lambdas
+  // (mesma tau/poisson/truncagem do calculateDixonColes) e devolve a prob de cada
+  // lado cobrir a linha. Para .5, pAway = 1 - pHome por construção.
+  // NOTA v2 futura: o Handicap europeu/3-way (Handicap Result, id 9) tem o "empate
+  // handicap" como terceiro resultado e NÃO passa por aqui.
+  function ahCoverProbs(lambdaH, lambdaA, homeLine, rho = -0.12) {
+    if (!Number.isFinite(lambdaH) || !Number.isFinite(lambdaA) || !Number.isFinite(homeLine)) return null;
+    if (Math.abs(homeLine * 2) % 2 !== 1) return null; // só meias-linhas no v1
+    const lH = Math.max(0.1, Math.min(5, lambdaH));
+    const lA = Math.max(0.1, Math.min(5, lambdaA));
+    const fact = [1, 1, 2, 6, 24, 120, 720, 5040];
+    const poi = (k, lam) => Math.exp(-lam) * Math.pow(lam, k) / fact[k];
+    const tau = (i, j) => {
+      if (i === 0 && j === 0) return 1 - lH * lA * rho;
+      if (i === 0 && j === 1) return 1 + lH * rho;
+      if (i === 1 && j === 0) return 1 + lA * rho;
+      if (i === 1 && j === 1) return 1 - rho;
+      return 1;
+    };
+    const MAX = 6;
+    let total = 0, home = 0;
+    for (let i = 0; i <= MAX; i++) {
+      for (let j = 0; j <= MAX; j++) {
+        const p = tau(i, j) * poi(i, lH) * poi(j, lA);
+        total += p;
+        if (i + homeLine > j) home += p;
+      }
+    }
+    if (!(total > 0)) return null;
+    const pHome = home / total;
+    return { home: +pHome.toFixed(3), away: +(1 - pHome).toFixed(3) };
+  }
+
+  // Médias de golos por liga a partir do formData (input do calculateDixonColes).
+  // Exige >=4 equipas com sample home E away para a liga contar.
+  function computeLeagueAverages(formData){
+    if(!formData)return{};
+    const byLeague={};
+    for(const tid in formData){
+      const team=formData[tid];
+      if(!team||!team.lid)continue;
+      const lid=team.lid;
+      if(!byLeague[lid])byLeague[lid]={homeFor:[],awayFor:[],homeAg:[],awayAg:[]};
+      if(team.attackAvgHome>0&&(team.gamesHome||0)>=2)byLeague[lid].homeFor.push(team.attackAvgHome);
+      if(team.attackAvgAway>0&&(team.gamesAway||0)>=2)byLeague[lid].awayFor.push(team.attackAvgAway);
+      if(team.defenseAvgHome>0&&(team.gamesHome||0)>=2)byLeague[lid].homeAg.push(team.defenseAvgHome);
+      if(team.defenseAvgAway>0&&(team.gamesAway||0)>=2)byLeague[lid].awayAg.push(team.defenseAvgAway);
+    }
+    const result={};
+    const avg=arr=>arr.length?arr.reduce((s,x)=>s+x,0)/arr.length:0;
+    for(const lid in byLeague){
+      const b=byLeague[lid];
+      if(b.homeFor.length<4||b.awayFor.length<4)continue;
+      result[lid]={
+        homeGoalsAvg:+avg(b.homeFor).toFixed(2),
+        awayGoalsAvg:+avg(b.awayFor).toFixed(2),
+        homeGoalsConceded:+avg(b.homeAg).toFixed(2),
+        awayGoalsConceded:+avg(b.awayAg).toFixed(2),
+      };
+    }
+    return result;
+  }
+
+  function calcXGWorker(hs, as_, hName, aName, advData, hForm, aForm, useRealXg=false){
+    const hAdv=hName?advData[hName]:null;
+    const aAdv=aName?advData[aName]:null;
+    // V2 (#2/3B): quando ligado e ambos os lados têm xG real medido em >=2 jogos,
+    // usa-o em vez do proxy `shotsOn*0.30`. Mantém-se OFF por defeito → o scorer
+    // antigo (produção) fica byte-a-byte igual; só o calcConfidenceWorkerV2 liga a flag.
+    if(useRealXg && hAdv?.xgRealAvg!=null && aAdv?.xgRealAvg!=null && (hAdv.xgRealGames||0)>=2 && (aAdv.xgRealGames||0)>=2){
+      const hXG=hAdv.xgRealHomeAvg!=null?hAdv.xgRealHomeAvg:hAdv.xgRealAvg;
+      const aXG=aAdv.xgRealAwayAvg!=null?aAdv.xgRealAwayAvg:aAdv.xgRealAvg;
+      const h=Math.max(0.3,hXG), a=Math.max(0.2,aXG);
+      return{home:h,away:a,total:parseFloat((h+a).toFixed(2)),src:'real'};
+    }
+    if(hAdv&&aAdv){
+      const hShots=hAdv.shotsOnAvg||0;
+      const aShots=aAdv.shotsOnAvg||0;
+      const hXG=parseFloat((hShots*0.30*1.1).toFixed(2));
+      const aXG=parseFloat((aShots*0.30).toFixed(2));
+      return{home:Math.max(0.3,hXG),away:Math.max(0.2,aXG),total:parseFloat((Math.max(0.3,hXG)+Math.max(0.2,aXG)).toFixed(2))};
+    }
+    // Se não houver statsData da liga, usar splits home/away do formData (já com fallback global aplicado)
+    if((!hs||!as_)&&hForm&&aForm){
+      const leagueAvg=1.35;
+      const hAttack=((hForm.attackAvgHome||hForm.attackAvg||0)||leagueAvg)/leagueAvg;
+      const hDef=((hForm.defenseAvgHome||hForm.defenseAvg||0)||leagueAvg)/leagueAvg;
+      const aAttack=((aForm.attackAvgAway||aForm.attackAvg||0)||leagueAvg)/leagueAvg;
+      const aDef=((aForm.defenseAvgAway||aForm.defenseAvg||0)||leagueAvg)/leagueAvg;
+      const hXG=parseFloat((hAttack*aDef*leagueAvg*1.25).toFixed(2));
+      const aXG=parseFloat((aAttack*hDef*leagueAvg).toFixed(2));
+      return{home:hXG,away:aXG,total:parseFloat((hXG+aXG).toFixed(2))};
+    }
+    if(!hs||!as_)return null;
+    const leagueAvg=1.35;
+    const hAttack=(hs.goalsForAvgHome||leagueAvg)/leagueAvg;
+    const hDef=(hs.goalsAgainstAvgHome||leagueAvg)/leagueAvg;
+    const aAttack=(as_.goalsForAvgAway||leagueAvg)/leagueAvg;
+    const aDef=(as_.goalsAgainstAvgAway||leagueAvg)/leagueAvg;
+    const hXG=parseFloat((hAttack*aDef*leagueAvg*1.25).toFixed(2));
+    const aXG=parseFloat((aAttack*hDef*leagueAvg).toFixed(2));
+    return{home:hXG,away:aXG,total:parseFloat((hXG+aXG).toFixed(2))};
+  }
+
+  function getDcProbForPick(pick, dc) {
+    if (!dc) return null;
+    // Identidade estruturada (estreia no Handicap 2-way): quando o pick traz
+    // marketKey/line/selectionKey, a lógica usa-os em vez da string `bet`. Os
+    // mercados antigos continuam a resolver pela string PT abaixo.
+    if (pick?.marketKey === 'ah' && pick.line != null && (pick.selectionKey === 'home' || pick.selectionKey === 'away')) {
+      const homeLine = pick.selectionKey === 'home' ? Number(pick.line) : -Number(pick.line);
+      const probs = ahCoverProbs(dc.lambdaH, dc.lambdaA, homeLine);
+      return probs ? probs[pick.selectionKey] : null;
+    }
+    const home = (pick.home || '').toLowerCase();
+    const away = (pick.away || '').toLowerCase();
+    const bet = (pick.bet || '').toLowerCase();
+    if (bet === 'vitória ' + home || bet === 'vitoria ' + home) return dc.pHome;
+    if (bet === 'vitória ' + away || bet === 'vitoria ' + away) return dc.pAway;
+    if (bet === 'empate') return dc.pDraw;
+    if (bet === 'over 2.5') return dc.pOver25;
+    if (bet === 'under 2.5') return dc.pUnder25;
+    if (bet === 'ambas marcam ✓' || bet === 'ambas marcam ✔') return dc.pBtts;
+    if (bet === 'ambas marcam ✗' || bet === 'ambas marcam ✘' || bet.includes('ambas marcam x')) return dc.pNoBtts;
+    if (bet === '1x') return dc.p1X;
+    if (bet === 'x2') return dc.pX2;
+    if (bet === '12') return dc.p12;
+    if (bet === '1x + over 2.5') return dc.p1XOver;
+    if (bet === 'x2 + over 2.5') return dc.pX2Over;
+    if (bet === '1/2 + over 2.5' || bet === '12 + over 2.5') return dc.p12Over;
+    if (bet === '1x + under 2.5') return dc.p1XUnder;
+    if (bet === 'x2 + under 2.5') return dc.pX2Under;
+    if (bet === '1/2 + under 2.5' || bet === '12 + under 2.5') return dc.p12Under;
+    if (bet === '1x + ambas marcam ✓') return dc.p1XBtts;
+    if (bet === 'x2 + ambas marcam ✓') return dc.pX2Btts;
+    if (bet === '1/2 + ambas marcam ✓' || bet === '12 + ambas marcam ✓') return dc.p12Btts;
+    if (bet === '1x + ambas marcam ✗') return dc.p1XNoBtts;
+    if (bet === 'x2 + ambas marcam ✗') return dc.pX2NoBtts;
+    if (bet === '1/2 + ambas marcam ✗' || bet === '12 + ambas marcam ✗') return dc.p12NoBtts;
+    return null;
+  }
+
+  function indicativeOddFromProb(prob) {
+    if (!Number.isFinite(prob) || prob <= 0) return null;
+    return Math.ceil((1 / prob) * 100) / 100;
+  }
+
+  function effectiveHistoryEv(pick) {
+    const val = pick?.evDc != null ? Number(pick.evDc) : Number(pick?.ev ?? 0);
+    return Number.isFinite(val) ? val : 0;
+  }
+
+  function isSimpleDcHistory(pick) {
+    return pick?.historyMarket === 'dc' ||
+      pick?.source === 'dc' ||
+      pick?.marketType === 'dc' ||
+      (pick?.marketType === 'combo' && ['1X', 'X2', '12'].includes(pick?.bet || ''));
+  }
+
+  function historyMarketGroup(pick, historyMarket) {
+    if (historyMarket === 'dc' || isSimpleDcHistory(pick)) return 'dc';
+    if (historyMarket === 'combo_over' || historyMarket === 'combo_under' ||
+        historyMarket === 'combo_btts' || historyMarket === 'combo_bttsno' ||
+        historyMarket === 'half_over' || historyMarket === 'half_under' ||
+        historyMarket === 'half_btts' || historyMarket === 'half_bttsno' ||
+        pick?.marketType === 'combo') return 'combo';
+    return historyMarket || pick?.marketType || pick?.source || 'unknown';
+  }
+
+  function isPublishedBeforeStart(pick, snapshot) {
+    const fixtureMs = pick?.fixtureDate ? new Date(pick.fixtureDate).getTime() : NaN;
+    const publishedAt = pick?.publishedAt || snapshot?.capturedAt || snapshot?.generatedAt || snapshot?.fetchedAt || snapshot?.createdAt || null;
+    const publishedMs = publishedAt ? new Date(publishedAt).getTime() : NaN;
+    if (!Number.isFinite(fixtureMs) || !Number.isFinite(publishedMs)) return true;
+    return publishedMs < fixtureMs;
+  }
+
+  const COMBO_HISTORY_MIN_PROB = 55;
+
+  function isOfficialHistoryPick(pick, historyMarket, snapshot) {
+    if (!pick || pick.lowConfidence || pick.noOdds || pick.isFriendly) return false;
+    if (!isPublishedBeforeStart(pick, snapshot)) return false;
+
+    const confidence = Number(pick.confidence || 0);
+    const odd = Number(pick.odd || 0);
+    if (confidence < 5) return false;
+    if (!Number.isFinite(odd) || odd <= 1) return false;
+
+    const market = historyMarketGroup(pick, historyMarket);
+    const prob = Number(pick.dcProb != null ? pick.dcProb * 100 : pick.prob || 0);
+
+    if (market === 'combo') {
+      if (!Number.isFinite(prob) || prob < COMBO_HISTORY_MIN_PROB) return false;
+    } else {
+      if (pick.evDc == null && pick.ev == null) return false;
+      if (effectiveHistoryEv(pick) < 0) return false;
+    }
+
+    if (market === 'dc') return odd >= 1.20 && odd <= 2.40;
+    if (market === 'h2h') return odd >= 1.30 && odd <= 4.00 && (!Number.isFinite(prob) || prob >= 20);
+    if (market === 'totals') return odd >= 1.35 && odd <= 3.20;
+    if (market === 'btts') return odd >= 1.45 && odd <= 3.20;
+    if (market === 'combo') return odd >= 1.30 && odd <= 4.00;
+    if (market === 'corners' || market === 'ht') return odd >= 1.45 && odd <= 3.50;
+    // Handicap 2-way: a linha principal vive perto do even money; fora desta janela
+    // ou a linha não é a principal ou a odd é outlier.
+    if (market === 'ah') return odd >= 1.50 && odd <= 2.60;
+    return odd >= 1.25 && odd <= 4.00;
+  }
+
+  function officialHistoryRejectReason(pick, historyMarket, snapshot) {
+    if (!pick) return 'missing-pick';
+    if (pick.lowConfidence) return 'low-confidence-flag';
+    if (pick.noOdds) return 'no-odds';
+    if (pick.isFriendly) return 'friendly';
+    if (!isPublishedBeforeStart(pick, snapshot)) return 'published-after-start';
+
+    const confidence = Number(pick.confidence || 0);
+    const odd = Number(pick.odd || 0);
+    if (confidence < 5) return 'confidence-under-5';
+    if (!Number.isFinite(odd) || odd <= 1) return 'invalid-odd';
+    const market = historyMarketGroup(pick, historyMarket);
+    const prob = Number(pick.dcProb != null ? pick.dcProb * 100 : pick.prob || 0);
+
+    if (market === 'combo') {
+      if (!Number.isFinite(prob) || prob < COMBO_HISTORY_MIN_PROB) return 'combo-prob-too-low';
+    } else {
+      if (pick.evDc == null && pick.ev == null) return 'missing-ev';
+      if (effectiveHistoryEv(pick) < 0) return 'negative-ev';
+    }
+
+    if (market === 'dc' && !(odd >= 1.20 && odd <= 2.40)) return 'dc-odd-out-of-range';
+    if (market === 'h2h' && !(odd >= 1.30 && odd <= 4.00)) return 'h2h-odd-out-of-range';
+    if (market === 'h2h' && Number.isFinite(prob) && prob < 20) return 'h2h-prob-under-20';
+    if (market === 'totals' && !(odd >= 1.35 && odd <= 3.20)) return 'totals-odd-out-of-range';
+    if (market === 'btts' && !(odd >= 1.45 && odd <= 3.20)) return 'btts-odd-out-of-range';
+    if (market === 'combo' && !(odd >= 1.30 && odd <= 4.00)) return 'combo-odd-out-of-range';
+    if ((market === 'corners' || market === 'ht') && !(odd >= 1.45 && odd <= 3.50)) return `${market}-odd-out-of-range`;
+    if (market === 'ah' && !(odd >= 1.50 && odd <= 2.60)) return 'ah-odd-out-of-range';
+    if (!(odd >= 1.25 && odd <= 4.00)) return 'fallback-odd-out-of-range';
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ODDS NORMALIZATION (puro — odds de N bookmakers → 1 pick por mercado/selecção)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Agrega uma lista de odds de várias bookies numa única odd representativa.
+  // Estratégia muito conservadora:
+  //   n>=3: remove outliers altos e usa a odd mais baixa restante. Isto evita mostrar
+  //         uma odd "boa" que existe numa bookie do feed mas que o utilizador não
+  //         encontra facilmente em casas portuguesas. Melhor falhar por baixo do que
+  //         inflacionar EV.
+  //   n=2:  usa a MÍNIMA (conservador — sem referência para detectar outlier).
+  //   n=1:  usa a única disponível (sem alternativa).
+  // Devolve null se nenhuma odd válida (>1) for fornecida.
+  function aggregateOdds(oddsList){
+    if(!oddsList||oddsList.length===0)return null;
+    const valid=oddsList.filter(o=>typeof o==='number'&&o>1&&Number.isFinite(o));
+    if(valid.length===0)return null;
+    const round2=x=>Math.round(x*100)/100;
+    if(valid.length===1)return round2(valid[0]);
+    if(valid.length===2)return round2(Math.min(valid[0],valid[1]));
+    const sorted=[...valid].sort((a,b)=>a-b);
+    const median=arr=>arr.length%2===0
+      ?(arr[arr.length/2-1]+arr[arr.length/2])/2
+      :arr[Math.floor(arr.length/2)];
+    const m1=median(sorted);
+    // Sanity filter: rejeitar odds >30% acima da mediana inicial.
+    const ceiling=m1*1.30;
+    const filtered=sorted.filter(o=>o<=ceiling);
+    if(filtered.length===0)return round2(m1); // fallback (improvável)
+    return round2(filtered[0]);
+  }
+
+  const PT_BOOKMAKER_PRIORITY = ['betano'];
+  function normBookmakerName(name){
+    return String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+  }
+  function isPreferredPtBookmaker(bookmaker){
+    const name = normBookmakerName(bookmaker?.name || bookmaker?.title || bookmaker?.key || bookmaker?.id);
+    return PT_BOOKMAKER_PRIORITY.includes(name);
+  }
+
+  // Normaliza odds de TODOS os bookmakers num jogo, agregando por (marketType, bet)
+  // para produzir UM pick por mercado/selecção (em vez de N picks duplicados,
+  // um por bookie como antes). Resolve o bug das odds-fantasma (ex: @20.00 numa
+  // bookie exótica quando mercado real está em 10-14).
+  function normalizeBookmakers(bookmakers, home, away){
+    const simpleEv = odd => Math.round((odd - 1) * 10) / 10;
+
+    // Fase 1: recolher odds por mercado/selecao. Se existir Betano para esse
+    // mercado, usamos essa referencia interna; se nao existir, mantemos o fallback
+    // conservador por agregacao geral.
+    const groups=new Map();
+    const collect=(key,marketType,bet,odd,isPreferred=false)=>{
+      if(!odd||odd<=1)return;
+      if(!groups.has(key))groups.set(key,{marketType,bet,odds:[],preferredOdds:[]});
+      const group=groups.get(key);
+      group.odds.push(odd);
+      if(isPreferred)group.preferredOdds.push(odd);
+    };
+
+    for(const bk of bookmakers){
+      const preferredBk=isPreferredPtBookmaker(bk);
+      for(const bet of (bk.bets||[])){
+        const bn=bet.name||'';const id=bet.id;
+        const vs=bet.values||[];
+        if(id===1||bn==='Match Winner'){
+          const hO=parseFloat(vs.find(v=>v.value==='Home')?.odd)||0;
+          const dO=parseFloat(vs.find(v=>v.value==='Draw')?.odd)||0;
+          const aO=parseFloat(vs.find(v=>v.value==='Away')?.odd)||0;
+          collect('h2h|H','h2h',`Vitória ${home}`,hO,preferredBk);
+          collect('h2h|D','h2h','Empate',dO,preferredBk);
+          collect('h2h|A','h2h',`Vitória ${away}`,aO,preferredBk);
+        }
+        if(id===5||bn.includes('Over/Under')){
+          const o25=parseFloat(vs.find(v=>v.value==='Over 2.5')?.odd)||0;
+          const u25=parseFloat(vs.find(v=>v.value==='Under 2.5')?.odd)||0;
+          collect('totals|O25','totals','Over 2.5',o25,preferredBk);
+          collect('totals|U25','totals','Under 2.5',u25,preferredBk);
+        }
+        if(id===8||bn==='Both Teams Score'){
+          const bY=parseFloat(vs.find(v=>v.value==='Yes')?.odd)||0;
+          const bN=parseFloat(vs.find(v=>v.value==='No')?.odd)||0;
+          collect('btts|Y','btts','Ambas Marcam ✓',bY,preferredBk);
+          collect('btts|N','btts','Ambas Marcam ✗',bN,preferredBk);
+        }
+        if(id===3||bn==='Double Chance'){
+          const x1=parseFloat(vs.find(v=>v.value==='Home/Draw')?.odd)||0;
+          const x2=parseFloat(vs.find(v=>v.value==='Draw/Away')?.odd)||0;
+          const d12=parseFloat(vs.find(v=>v.value==='Home/Away')?.odd)||0;
+          collect('combo|1X','combo','1X',x1,preferredBk);
+          collect('combo|X2','combo','X2',x2,preferredBk);
+          collect('combo|12','combo','12',d12,preferredBk);
+        }
+        if(id===45||/corners?/i.test(bn)){
+          // Aceitar APENAS linhas standard (7.5-11.5). Linhas extremas (Under 1.5, Under 3.5,
+          // etc.) são estatisticamente mortas — odds @2.40 mas probabilidade real ~10-15%
+          // (não os 40% implicados). Sem fallback para "qualquer Over/Under".
+          const ov=vs.find(v=>/^Over\s+(7\.5|8\.5|9\.5|10\.5|11\.5)\s*$/i.test(v.value||''));
+          const un=vs.find(v=>/^Under\s+(7\.5|8\.5|9\.5|10\.5|11\.5)\s*$/i.test(v.value||''));
+          if(!ov&&!un)continue;
+          const line=((ov?.value||un?.value).match(/\d+(?:\.\d+)?/)||['8.5'])[0];
+          const oOdd=parseFloat(ov?.odd)||0;
+          const uOdd=parseFloat(un?.odd)||0;
+          collect(`corners|O|${line}`,'corners',`Over ${line} Cantos`,oOdd,preferredBk);
+          collect(`corners|U|${line}`,'corners',`Under ${line} Cantos`,uOdd,preferredBk);
+        }
+        if(id===4){
+          // Handicap 2-way (v1): SÓ meias-linhas full-time, e SÓ o id 4 exato
+          // ("Asian Handicap") — o feed também traz "Asian Handicap First Half"
+          // (19), "(2nd Half)" (104) e "Corners Asian Handicap" (56), que ficam de
+          // fora; sem fallback por nome, de propósito. Nota naming: nas casas PT
+          // isto aparece como "Handicap 2-way" (Betclic) — o "Handicap" simples da
+          // Betano é o europeu/3-way (Handicap Result, id 9), fica para v2.
+          for(const v of vs){
+            const m=/^(Home|Away)\s+([+-]?\d+(?:\.\d+)?)$/.exec(String(v.value||'').trim());
+            if(!m)continue;
+            const raw=parseFloat(m[2]);
+            if(Math.abs(raw*2)%2!==1)continue; // só .5 — sem push, settlement binário
+            const odd=parseFloat(v.odd)||0;
+            const isHome=m[1]==='Home';
+            // FORMATO DO FEED (validado em produção): os DOIS lados trazem a linha
+            // na perspetiva da CASA — "Home -1.5" e "Away -1.5" são as duas pontas
+            // do MESMO mercado (a equipa de fora recebe +1.5). A linha efetiva da
+            // seleção de fora é, portanto, -raw.
+            const line=isHome?raw:-raw;
+            const team=isHome?home:away;
+            const fmt=line>0?`+${line}`:`${line}`;
+            collect(`ah|${isHome?'H':'A'}|${line}`,'ah',`Handicap 2-way: ${team} ${fmt}`,odd,preferredBk);
+          }
+        }
+        if(id===10||id===26||/half time|first half|1st half|intervalo/i.test(bn)){
+          const hO=parseFloat((vs.find(v=>v.value==='Home')||vs.find(v=>v.value===home))?.odd)||0;
+          const dO=parseFloat(vs.find(v=>v.value==='Draw')?.odd)||0;
+          const aO=parseFloat((vs.find(v=>v.value==='Away')||vs.find(v=>v.value===away))?.odd)||0;
+          collect('ht|H','ht',`Intervalo: Vitória ${home}`,hO,preferredBk);
+          collect('ht|D','ht','Intervalo: Empate',dO,preferredBk);
+          collect('ht|A','ht',`Intervalo: Vitória ${away}`,aO,preferredBk);
+        }
+      }
+    }
+
+    // Fase 2: agregar odds de cada grupo (mediana + sanity filter) e aplicar
+    // os sanity ranges por mercado (cantos 1.50-3.00, O/U 1.20-4.50).
+    const picks=[];
+    const ahSides={H:new Map(),A:new Map()};
+    for(const [key,g] of groups){
+      const hasPreferred=g.preferredOdds.length>0;
+      const agg=aggregateOdds(hasPreferred?g.preferredOdds:g.odds);
+      if(agg===null||agg<=1)continue;
+      // Handicap 2-way: não publicar a escada toda — guardar candidatos agregados
+      // por lado/linha e escolher a linha principal depois do loop.
+      if(g.marketType==='ah'){
+        const [,side,lineStr]=key.split('|');
+        ahSides[side].set(lineStr,{g,agg,hasPreferred});
+        continue;
+      }
+      // Range sanity por mercado (mantém comportamento pré-existente).
+      if(g.marketType==='totals'&&(agg<1.20||agg>4.50))continue;
+      if(g.marketType==='corners'&&(agg<1.50||agg>3.00))continue;
+      picks.push({
+        marketType:g.marketType,
+        bet:g.bet,
+        odd:agg,
+        ev:simpleEv(agg),
+        prob:Math.round(100/agg),
+        _nBookies:g.odds.length, // diagnostic, não usado downstream
+        _oddsSource:hasPreferred?'betano':'aggregate',
+        _preferredBookmaker:hasPreferred?'Betano':null,
+      });
+    }
+
+    // Handicap 2-way: escolher a LINHA PRINCIPAL — o par (casa L, fora -L) com as
+    // odds mais equilibradas entre si, dentro de uma janela perto do even money
+    // (é assim que as casas definem a linha principal). Publica no máximo 2 picks
+    // por jogo (um por lado), com identidade estruturada marketKey/line/selectionKey.
+    let mainAh=null;
+    for(const [lineStr,h] of ahSides.H){
+      const homeLine=parseFloat(lineStr);
+      const a=ahSides.A.get(String(-homeLine));
+      if(!a)continue;
+      if(h.agg<1.40||h.agg>2.75||a.agg<1.40||a.agg>2.75)continue;
+      const gap=Math.abs(h.agg-a.agg);
+      if(!mainAh||gap<mainAh.gap)mainAh={gap,homeLine,h,a};
+    }
+    if(mainAh){
+      const pushAh=(selectionKey,line,entry)=>picks.push({
+        marketType:'ah',
+        marketKey:'ah',
+        period:'ft',
+        selectionKey,
+        line,
+        bet:entry.g.bet,
+        odd:entry.agg,
+        ev:simpleEv(entry.agg),
+        prob:Math.round(100/entry.agg),
+        _nBookies:entry.g.odds.length,
+        _oddsSource:entry.hasPreferred?'betano':'aggregate',
+        _preferredBookmaker:entry.hasPreferred?'Betano':null,
+      });
+      pushAh('home',mainAh.homeLine,mainAh.h);
+      pushAh('away',-mainAh.homeLine,mainAh.a);
+    }
+    return picks;
+  }
+
+  return Object.freeze({
+    calculateDixonColes,
+    ahCoverProbs,
+    computeLeagueAverages,
+    calcXGWorker,
+    getDcProbForPick,
+    indicativeOddFromProb,
+    effectiveHistoryEv,
+    isSimpleDcHistory,
+    historyMarketGroup,
+    isPublishedBeforeStart,
+    isOfficialHistoryPick,
+    officialHistoryRejectReason,
+    aggregateOdds,
+    normalizeBookmakers,
+    COMBO_HISTORY_MIN_PROB,
+  });
+})();
+// ⇧ SYNC scoring.mjs ⇧
+
 // ── EXTRACT PICKS ─────────────────────────────────────────────────
 function extractPicks(game,sport){
   const picks=[],home=game.home_team,away=game.away_team;
@@ -6368,6 +6933,46 @@ function renderBankrollChart(bets){
 
 // ── MAIN LOAD ─────────────────────────────────────────────────────
 // ── AMIGÁVEIS VIA API-FOOTBALL ────────────────────────────────────
+function syncedFriendlyPicks(rawBookmakers, fixture, friendlySport){
+  const scoring=window.WorkerScoring;
+  if(!scoring?.normalizeBookmakers||!rawBookmakers?.length)return[];
+  const home=fixture.teams.home.name,away=fixture.teams.away.name;
+  const dt=fmtDateTime(fixture.fixture.date);
+  const base={
+    home,away,league:friendlySport.label,group:friendlySport.group,icon:friendlySport.icon,
+    time:dt.time,date:dt.date,display:dt.display,leagueId:friendlySport.lid,
+    commence:fixture.fixture.date,homeLogo:fixture.teams.home.logo||'',awayLogo:fixture.teams.away.logo||'',
+    leagueLogo:fixture.league?.logo||'',isFriendly:true,fixtureId:fixture.fixture.id
+  };
+  return scoring.normalizeBookmakers(rawBookmakers,home,away)
+    .filter(p=>p.marketType!=='ah') // AH vem do bucket worker /tops.ah para evitar duplicados locais
+    .map(p=>{
+      const odd=Number(p.odd)||0;
+      const prob=Number(p.prob)||Math.round(100/odd)||0;
+      // EV vs prob implícita (fórmula do cliente, ≈0 por construção) — o p.ev do
+      // worker é o placeholder (odd-1), sempre positivo, que só o calcTops substitui.
+      const ev=Math.round((prob/100*odd-1)*100);
+      const pick={
+        ...base,
+        ...p,
+        marketType:p.marketType,
+        historyMarket:p.historyMarket,
+        bet:p.bet,
+        odd,
+        prob,
+        ev,
+        rawProb:prob,
+        bookmakerOdds:[],
+        abovePinnacle:false,
+        noOdds:false,
+        confidence:5
+      };
+      pick.confidence=calcConfidence(pick);
+      return pick;
+    })
+    .filter(p=>p.bet&&p.odd>=1.30);
+}
+
 async function fetchFriendlies(){
   try{
     // Datas na timezone de Lisboa (não UTC) — coerente com o fetch principal e os filtros,
@@ -6408,21 +7013,27 @@ async function fetchFriendlies(){
     for(const f of fixtures){
       const id=f.fixture.id;
       const home=f.teams.home.name,away=f.teams.away.name;
-      const bks=(oddsMap[id]&&oddsMap[id].length)?normalizeBookmakers(oddsMap[id],home,away):[];
-      if(bks.length){
-        const game={id:`af_${id}`,home_team:home,away_team:away,commence_time:f.fixture.date,homeLogo:f.teams.home.logo||'',awayLogo:f.teams.away.logo||'',leagueLogo:f.league?.logo||'',bookmakers:bks};
-        const picks=extractPicks(game,friendlySport).map(p=>({...p,isFriendly:true,fixtureId:id}));
-        out.push(...picks);
+      const rawBks=oddsMap[id]||[];
+      const syncedPicks=syncedFriendlyPicks(rawBks,f,friendlySport);
+      if(syncedPicks.length){
+        out.push(...syncedPicks);
       }else{
-        // Sem odds em lado nenhum — manter placeholder para o jogo continuar visível.
-        out.push({
-          home,away,league:'Amigáveis Seleções 🌍',group:'soccer',icon:'🌍',
-          time:new Date(f.fixture.date).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}),
-          date:new Date(f.fixture.date).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),
-          commence:f.fixture.date,leagueId:10,
-          bet:'Sem odds disponíveis',marketType:'h2h',odd:0,prob:0,ev:0,confidence:0,
-          bookmakerOdds:[],rawProb:0,isFriendly:true,noOdds:true,fixtureId:id,
-        });
+        const bks=rawBks.length?normalizeBookmakers(rawBks,home,away):[];
+        if(bks.length){
+          const game={id:`af_${id}`,home_team:home,away_team:away,commence_time:f.fixture.date,homeLogo:f.teams.home.logo||'',awayLogo:f.teams.away.logo||'',leagueLogo:f.league?.logo||'',bookmakers:bks};
+          const picks=extractPicks(game,friendlySport).map(p=>({...p,isFriendly:true,fixtureId:id}));
+          out.push(...picks);
+        }else{
+          // Sem odds em lado nenhum — manter placeholder para o jogo continuar visível.
+          out.push({
+            home,away,league:'Amigáveis Seleções 🌍',group:'soccer',icon:'🌍',
+            time:new Date(f.fixture.date).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}),
+            date:new Date(f.fixture.date).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'}),
+            commence:f.fixture.date,leagueId:10,
+            bet:'Sem odds disponíveis',marketType:'h2h',odd:0,prob:0,ev:0,confidence:0,
+            bookmakerOdds:[],rawProb:0,isFriendly:true,noOdds:true,fixtureId:id,
+          });
+        }
       }
     }
     return out;
