@@ -6348,15 +6348,17 @@ function renderBankrollChart(bets){
 // ── AMIGÁVEIS VIA API-FOOTBALL ────────────────────────────────────
 async function fetchFriendlies(){
   try{
-    const today=new Date().toISOString().slice(0,10);
-    const tom=new Date();tom.setDate(tom.getDate()+1);
-    const tomStr=tom.toISOString().slice(0,10);
+    // Datas na timezone de Lisboa (não UTC) — coerente com o fetch principal e os filtros,
+    // senão os friendlies entram/saem conforme a timezone/hora do dispositivo.
+    const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Lisbon'});
+    const tomStr=new Date(Date.now()+86400000).toLocaleDateString('sv-SE',{timeZone:'Europe/Lisbon'});
     // League 10 = International friendlies. Ao contrário das ligas domésticas
     // (época 2025-26 → season 2025), a liga de amigáveis usa season por ANO CIVIL
-    // (amigáveis de 2026 → season 2026). Usar o ano civil corrente.
-    const season=new Date().getFullYear();
+    // (amigáveis de 2026 → season 2026). Ano civil de Lisboa (today já é Lisboa) — fecha o bug
+    // de passagem de ano em dispositivos noutra timezone.
+    const season=Number(today.slice(0,4));
     const headers={'x-apisports-key':getFormKey()};
-    const res=await apiFetch(`${FORM_BASE}/fixtures?league=10&season=${season}&from=${today}&to=${tomStr}`,{headers});
+    const res=await apiFetch(`${FORM_BASE}/fixtures?league=10&season=${season}&from=${today}&to=${tomStr}&timezone=Europe/Lisbon`,{headers});
     const d=await res.json();
     const fixtures=d?.response||[];
     if(!fixtures.length)return[];
@@ -6402,7 +6404,7 @@ async function fetchFriendlies(){
       }
     }
     return out;
-  }catch{return[];}
+  }catch{return null;} // null = falha dura (distingue de [] = sem amigáveis hoje), p/ o gate de merge
 }
 
 // ── WORKER ANALYSIS LOADER ─────────────────────────────────────────────
@@ -6509,16 +6511,9 @@ async function loadGames(forceRefresh=false){
     const cached=loadCache();
     if(cached&&cached.data&&cached.data.length>0){
       // Filtrar só hoje/amanhã e jogos ainda não começados
-      const nowMs=Date.now();
-      const td=new Date().toDateString();
-      const tm=new Date();tm.setDate(tm.getDate()+1);const tmS=tm.toDateString();
-      allGames=cached.data.filter(p=>{
-        const d=new Date(p.commence);
-        const ds=d.toDateString();
-        if(ds===td)return d.getTime()>nowMs-3*60*60*1000; // today: keep if started <3h ago
-        if(ds===tmS)return true; // tomorrow: always include
-        return false;
-      });
+      // Mesma referência de dia do load fresco e do Top 15: betting day de Lisboa (06:00→06:00),
+      // não toDateString() local — para o dataset não depender da timezone do dispositivo.
+      allGames=cached.data.filter(p=>inBettingDay(p.commence,0)||inBettingDay(p.commence,1));
       addCacheSaved(SPORTS.length);
       document.getElementById('calls-saved').textContent=getCacheSaved();
       updateCacheUI(true,cached);
@@ -6669,10 +6664,12 @@ async function loadGames(forceRefresh=false){
 
   // Fetch international friendlies from API-Football
   document.getElementById('loader-step').textContent='Amigáveis internacionais...';
+  let friendliesOk=true; // false só se o ramo de amigáveis falhou (não se simplesmente não houver)
   try{
     const friendlies=await fetchFriendlies();
-    if(friendlies.length>0)allPicks.push(...friendlies);
-  }catch{}
+    if(friendlies===null)friendliesOk=false;
+    else if(friendlies.length>0)allPicks.push(...friendlies);
+  }catch{friendliesOk=false;}
 
   if(allPicks.length===0){
     errorDiv.style.display='block';
@@ -6691,21 +6688,26 @@ async function loadGames(forceRefresh=false){
     if(seen.has(k))return false;seen.add(k);return true;
   });
 
-  // Jogos de hoje e amanhã — inclui jogos que começaram há menos de 3h (podem estar a decorrer)
-  const now2=Date.now();
-  const todayStr=new Date().toDateString();
-  const tomDate=new Date();tomDate.setDate(tomDate.getDate()+1);
-  const tomStr=tomDate.toDateString();
-  allPicks=allPicks.filter(p=>{
-    const d=new Date(p.commence);
-    const isToday=d.toDateString()===todayStr;
-    const isTomorrow=d.toDateString()===tomStr;
-    // For today: include games started up to 3h ago (may still be live)
-    if(isToday)return d.getTime()>now2-3*60*60*1000;
-    // For tomorrow: only future games
-    if(isTomorrow)return d.getTime()>now2;
-    return false;
-  });
+  // A: um load PARCIAL (rate-limits, ou um ramo inteiro a falhar — friendlies OU ligas reais) não
+  // deve apagar uma cache mais cheia. Só nesse caso reaproveitamos a cache anterior — e apenas
+  // JOGOS que o load fresco não trouxe de todo; NUNCA ressuscitamos um pick/odd que saiu de um
+  // jogo presente no fresco (jogo cancelado, odd retirada, correção da API ficam respeitados).
+  // Num load saudável não há merge → o fresco é autoritativo. O filtro de betting day limpa stale.
+  const degraded=apiErrors>=5||leaguesOk===0||!friendliesOk;
+  if(degraded){
+    const freshGames=new Set(allPicks.map(p=>`${p.home}|${p.away}`));
+    const prior=(loadCache()?.data)||[];
+    for(const p of prior){
+      if(freshGames.has(`${p.home}|${p.away}`))continue; // jogo já veio fresco → confiar no fresco
+      const k=`${p.home}|${p.away}|${p.bet}`;
+      if(!seen.has(k)){seen.add(k);allPicks.push(p);}
+    }
+  }
+
+  // B: manter só hoje + madrugada de amanhã na referência ÚNICA de Lisboa (betting day),
+  // igual ao Top 15 / multiples. Antes usava toDateString() local → o dataset dependia da
+  // timezone do dispositivo (friendlies/ligas a aparecer num aparelho e não noutro).
+  allPicks=allPicks.filter(p=>inBettingDay(p.commence,0)||inBettingDay(p.commence,1));
 
   // Basketball disabled — free plan only supports seasons up to 2022
   // Upgrade Basketball API plan at api-sports.io to enable NBA/Euroliga
@@ -7132,26 +7134,12 @@ function renderCardFallback(pick,index){
 
 async function renderFiltered(){
   const list=document.getElementById('game-list');
-  const nowMs=Date.now();
-  const todayStr=new Date().toDateString();
-  const tom=new Date();tom.setDate(tom.getDate()+1);
-  const tomStr=tom.toDateString();
   if(allGames.length===0&&document.getElementById('loading-state')?.style.display==='flex')return;
 
-  // Filter: today + tomorrow, using time window to handle timezone edge cases
-  let f=[...allGames].filter(g=>{
-    if(!g.commence)return false;
-    const d=new Date(g.commence);
-    if(isNaN(d.getTime()))return false;
-    const ds=d.toDateString();
-    // Primary: exact date match
-    if(ds===todayStr)return d.getTime()>nowMs-3*60*60*1000;
-    if(ds===tomStr)return true;
-    // Fallback: within next 36h (handles UTC offset mismatches)
-    const diff=d.getTime()-nowMs;
-    if(diff>-3*60*60*1000&&diff<36*60*60*1000)return true;
-    return false;
-  });
+  // Filtro: betting day de Lisboa (hoje + amanhã), igual ao dataset/tops — não toDateString()
+  // local, para a lista visível não divergir por timezone do dispositivo (substitui o antigo
+  // match exato + fallback de 36h, que era o paliativo para o desalinhamento UTC/local).
+  let f=[...allGames].filter(g=>g.commence&&(inBettingDay(g.commence,0)||inBettingDay(g.commence,1)));
   const nationalKeys=['UEFA Nations','Mundial FIFA','Qualif. Mundial','Europeu UEFA','Copa América','Taça Asiática','CAN África','Amigáveis'];
   // Sport filter
   if(currentSport==='value')f=f.filter(g=>g.ev>0&&!g.isFriendly);
@@ -7207,10 +7195,9 @@ async function renderFiltered(){
 
   if(f.length===0){list.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px;">Sem apostas neste intervalo agora.</div>';return;}
 
-  // Separate today vs tomorrow
-  const todayStr2=new Date().toDateString();
-  const todayPicks=f.filter(p=>new Date(p.commence).toDateString()===todayStr2);
-  const tomPicks=f.filter(p=>new Date(p.commence).toDateString()!==todayStr2);
+  // Separar hoje vs amanhã pelo betting day de Lisboa (não toDateString() local)
+  const todayPicks=f.filter(p=>inBettingDay(p.commence,0));
+  const tomPicks=f.filter(p=>!inBettingDay(p.commence,0));
   const secLabel=(txt,count)=>`<div class="section-day-header"><span class="section-day-label">${txt}</span><span class="section-day-count">${count} picks</span></div>`;
   const renderGroup=(picks,offset)=>picks.map((pick,i)=>{
     try{return renderCard(pick,i+offset,getForm(pick,true),getForm(pick,false));}
@@ -7224,13 +7211,9 @@ async function renderFiltered(){
   // Async: fetch form, H2H, fixture IDs for displayed picks AND top games across all sources
   // This ensures Top 15 and Top 10 per market cards also have form/stats loaded
   const visiblePicks=f.filter(p=>p.group==='soccer'&&p.leagueId);
-  const todayStr3=new Date().toDateString();
   const topGames=allGames
     .filter(p=>p.group==='soccer'&&p.leagueId&&!p.noOdds&&!p.isFriendly)
-    .filter(p=>{
-      const d=new Date(p.commence);
-      return d.toDateString()===todayStr3;
-    })
+    .filter(p=>inBettingDay(p.commence,0))
     .sort((a,b)=>composite(b)-composite(a))
     .slice(0,20); // top 20 games — balance between data quality and API/Worker limits
   // Merge and dedup by game
@@ -7251,8 +7234,8 @@ async function renderFiltered(){
     if(fetched===allAsyncPicks.length||(!rerenderScheduled&&fetched>=Math.min(3,allAsyncPicks.length))){
       rerenderScheduled=true;
       const doRender=()=>{
-        const tp=f.filter(p=>new Date(p.commence).toDateString()===todayStr2);
-        const tm=f.filter(p=>new Date(p.commence).toDateString()!==todayStr2);
+        const tp=f.filter(p=>inBettingDay(p.commence,0));
+        const tm=f.filter(p=>!inBettingDay(p.commence,0));
         list.innerHTML=
           (tp.length>0?secLabel('📅 Hoje',tp.length)+renderGroup(tp,0):'')+
           (tm.length>0?secLabel('📅 Amanhã',tm.length)+renderGroup(tm,tp.length):'');
@@ -7347,7 +7330,7 @@ function renderTop15(){
 
   const candidates=dedupArr.filter(p=>{
     if(!inBettingDay(p.commence,0))return false; // dentro do "betting day" de hoje (06:00→06:00 Lisboa)
-    if(p.isFriendly||p.noOdds)return false;
+    if(p.noOdds)return false; // friendlies SÃO elegíveis nos tops do betradar (app privada)
     const t=new Date(p.commence).getTime();
     if(t<now-3*60*60*1000)return false;
     if(p.odd<1.50)return false;
@@ -7490,7 +7473,7 @@ function renderMarketTop10(){
   const pool=[...dedup.values()].filter(p=>{
     if(!inBettingDay(p.commence,0))return false; // dentro do betting day (06:00→06:00 Lisboa)
     if(new Date(p.commence).getTime()<now-3*60*60*1000)return false;
-    if(p.noOdds||p.isFriendly)return false;
+    if(p.noOdds)return false; // friendlies SÃO elegíveis nos tops do betradar (app privada)
     if(p.marketType==='dc'){if(p.odd<1.30)return false;}
     else if(p.odd<1.50)return false;
     // Excluir picks com baixa confiança (equipa com <3 jogos analisados)
@@ -8241,16 +8224,8 @@ function initOfflineDetection(){
       // Load from cache when offline
       const cached=loadCache();
       if(cached&&allGames.length===0){
-        const nowMs=Date.now();
-        const td=new Date().toDateString();
-        const tm=new Date();tm.setDate(tm.getDate()+1);const tmS=tm.toDateString();
-        allGames=(cached.data||[]).filter(p=>{
-          const d=new Date(p.commence);
-          const ds=d.toDateString();
-          if(ds===td)return d.getTime()>nowMs-3*60*60*1000;
-          if(ds===tmS)return true;
-          return false;
-        });
+        // Betting day de Lisboa (consistente com loadGames/Top 15), não toDateString() local.
+        allGames=(cached.data||[]).filter(p=>inBettingDay(p.commence,0)||inBettingDay(p.commence,1));
         renderFiltered();
         showToast('📡 A mostrar dados em cache (offline)');
       }
