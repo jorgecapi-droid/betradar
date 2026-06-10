@@ -43,7 +43,7 @@ The `SPORTS` array (~line 1784) lists ~80 football leagues by API-Football `lid`
 ## Expansion roadmap
 
 - **Private app first.** New sports should be validated here before anything moves to the public blitztips/Worker pipeline.
-- **Football handicap is the next likely football market.** Add it as a full market path (odds extraction, confidence/model mapping, settlement, history/bankroll display, and tests/fixtures where possible), not as display-only text.
+- **Football Handicap 2-way is now in private validation.** BetRadar imports the worker's `tops.ah` bucket into the private picks UI and exposes it as a dedicated tab/top list. Keep it private until several settled days of `historyMarket:'ah'` are clean before opening it on blitztips.
 - **Tennis and basketball are planned later.** Tennis needs explicit handling for retirements/walkovers and best-of-3/best-of-5 formats. Basketball needs a separate confidence model (pace/offense/defense/rest/injuries), not the football Dixon-Coles assumptions.
 - **Country expansion should wait for structured pick identity/country config in the Worker.** Keep local labels/display flexible, but don't introduce another language/country that depends on parsing Portuguese `bet` strings.
 
@@ -60,7 +60,7 @@ A multi-layer client cache reduces API calls: `CACHE_KEY` (`betradar_cache_v32`)
 
 ## Markets / tabs
 
-`top15`, `h2h` (1X2), `totals` (O/U), `btts`, `combo` (DC+), `corners`, `ht` (Half-time). Also: Tomorrow view (`renderTomorrow`), a betslip widget (`renderWidget`/`widgetAdd`), multiples/accumulators (`generateMultiples`, `buildMultiplesFromTops`), and a history/bankroll section.
+`top15`, `h2h` (1X2), `totals` (O/U), `btts`, `dc`, `ah` (Handicap 2-way, worker `tops.ah`), `combo` (DC+), `corners`, `ht` (Half-time). Also: Tomorrow view (`renderTomorrow`), a betslip widget (`renderWidget`/`widgetAdd`), multiples/accumulators (`generateMultiples`, `buildMultiplesFromTops`), and a history/bankroll section.
 
 ## Betting history & bankroll (client-side only)
 
