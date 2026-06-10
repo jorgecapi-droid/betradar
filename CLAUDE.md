@@ -40,6 +40,13 @@ API keys can be stored client-side in localStorage (`br_odds_key`, `br_form_key`
 
 The `SPORTS` array (~line 1784) lists ~80 football leagues by API-Football `lid`, plus `BBALL_LEAGUES`, `HOCKEY_LEAGUES`, `BASEBALL_LEAGUES`.
 
+## Expansion roadmap
+
+- **Private app first.** New sports should be validated here before anything moves to the public blitztips/Worker pipeline.
+- **Football handicap is the next likely football market.** Add it as a full market path (odds extraction, confidence/model mapping, settlement, history/bankroll display, and tests/fixtures where possible), not as display-only text.
+- **Tennis and basketball are planned later.** Tennis needs explicit handling for retirements/walkovers and best-of-3/best-of-5 formats. Basketball needs a separate confidence model (pace/offense/defense/rest/injuries), not the football Dixon-Coles assumptions.
+- **Country expansion should wait for structured pick identity/country config in the Worker.** Keep local labels/display flexible, but don't introduce another language/country that depends on parsing Portuguese `bet` strings.
+
 ## Data flow
 
 1. `loadGames(forceRefresh)` — primary entry; loads cache or fetches fresh.
