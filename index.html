@@ -7256,17 +7256,38 @@ async function loadGames(forceRefresh=false){
     const now=new Date();
     const season=now.getMonth()<7?now.getFullYear()-1:now.getFullYear();
     const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Lisbon'});
+    const tomDate=new Date();tomDate.setDate(tomDate.getDate()+1); // setDate(+1) é DST-safe (vs +86400000ms)
+    const tomorrow=tomDate.toLocaleDateString('sv-SE',{timeZone:'Europe/Lisbon'});
     const headers={'x-apisports-key':getFormKey()};
     const allowedLids=new Set(SPORTS.map(s=>s.lid).filter(Boolean));
     const lidToSport={}; SPORTS.forEach(s=>{if(s.lid)lidToSport[s.lid]=s;});
 
-    // 1 call global para fixtures
-    const rfG=await apiFetch(`${FORM_BASE}/fixtures?date=${today}&timezone=Europe/Lisbon`,{headers});
-    const fdG=await rfG.json();
-    const allFixtures=(fdG?.response||[]).filter(f=>allowedLids.has(f.league?.id));
-    // Update API usage display
-    const rem=rfG.headers.get('x-ratelimit-requests-remaining');
-    if(rem){const n=parseInt(rem);const el=document.getElementById('odds-remaining');if(el){el.textContent=n;el.className=`api-val ${n>30000?'ok':n>5000?'warn':'danger'}`;}const fill=document.getElementById('odds-fill');if(fill)fill.style.width=`${Math.min(100,(n/75000)*100)}%`;}
+    // 1 call global por data do betting-day. O "hoje" privado tambem precisa da
+    // madrugada de amanha (ex: selecoes/MLS/Libertadores as 02:00 em Lisboa).
+    const fetchedFixtures=[];
+    const seenFixtureIds=new Set();
+    for(const dateStr of [today,tomorrow]){
+      // Falha numa data não pode abortar o load inteiro (ex: amanhã rate-limited
+      // depois de hoje já ter vindo bem) — conta como apiError e o caminho
+      // degraded/backfill decide a jusante.
+      try{
+        const rfG=await apiFetch(`${FORM_BASE}/fixtures?date=${dateStr}&timezone=Europe/Lisbon`,{headers});
+        const fdG=await rfG.json();
+        (fdG?.response||[]).forEach(f=>{
+          const id=f.fixture?.id;
+          if(!id||seenFixtureIds.has(id)||!allowedLids.has(f.league?.id))return;
+          seenFixtureIds.add(id);
+          fetchedFixtures.push(f);
+        });
+        // Update API usage display from the latest global fixtures response
+        const rem=rfG.headers.get('x-ratelimit-requests-remaining');
+        if(rem){const n=parseInt(rem);const el=document.getElementById('odds-remaining');if(el){el.textContent=n;el.className=`api-val ${n>30000?'ok':n>5000?'warn':'danger'}`;}const fill=document.getElementById('odds-fill');if(fill)fill.style.width=`${Math.min(100,(n/75000)*100)}%`;}
+      }catch(e){
+        apiErrors++;
+        console.warn(`loadGames: fixtures globais falharam para ${dateStr}:`,e?.message);
+      }
+    }
+    const allFixtures=fetchedFixtures;
 
     // Popular fixtureMap e formCache _tid
     const fixtureMap={}; const fixturesByLid={};
@@ -7287,13 +7308,19 @@ async function loadGames(forceRefresh=false){
     document.getElementById('loader-step').textContent='Buscar odds...';
 
     // Para cada liga com jogos, fazer 1 call de odds (não dá para fazer global em /odds)
-    const lidsWithGames=Object.keys(fixturesByLid);
+    const oddsGroups=new Map();
+    Object.values(fixtureMap).forEach(fix=>{
+      const t=new Date(fix.date);
+      const dateStr=t.toLocaleString('en-CA',{timeZone:'Europe/Lisbon',year:'numeric',month:'2-digit',day:'2-digit'});
+      oddsGroups.set(`${fix.lid}|${dateStr}`,{lid:fix.lid,dateStr});
+    });
+    const lidsWithGames=[...oddsGroups.values()];
     const oddsMap={};
     for(let i=0;i<lidsWithGames.length;i++){
-      const lid=lidsWithGames[i];
+      const {lid,dateStr}=lidsWithGames[i];
       progress.style.width=`${60+Math.round((i/lidsWithGames.length)*30)}%`;
       try{
-        const ro=await apiFetch(`${FORM_BASE}/odds?league=${lid}&season=${season}&date=${today}&timezone=Europe/Lisbon`,{headers});
+        const ro=await apiFetch(`${FORM_BASE}/odds?league=${lid}&season=${season}&date=${dateStr}&timezone=Europe/Lisbon`,{headers});
         if(ro.ok){
           const od=await ro.json();
           (od?.response||[]).forEach(item=>{const id=item.fixture?.id;if(id)oddsMap[id]=item.bookmakers||[];});
