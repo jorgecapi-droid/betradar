@@ -2,12 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildBlock, extractBlock, normalizeEol } from '../../betradar-worker/scripts/scoring-sync-block.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const START = '// ⇩ SYNC scoring.mjs (canónico: betradar-worker/scoring.mjs) ⇩';
-const END = '// ⇧ SYNC scoring.mjs ⇧';
 const DEFAULT_SOURCE = path.resolve(repoRoot, '..', 'betradar-worker', 'scoring.mjs');
 const DEFAULT_HTML = path.resolve(repoRoot, 'index.html');
 
@@ -31,67 +30,10 @@ if (!mode) {
 const sourcePath = resolveInputPath(argValue('--source', null), DEFAULT_SOURCE);
 const htmlPath = resolveInputPath(argValue('--html', null), DEFAULT_HTML);
 
-function normalizeEol(s) {
-  return String(s).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-}
-
 function dominantEol(s) {
   const crlf = (s.match(/\r\n/g) || []).length;
   const lf = (s.match(/(?<!\r)\n/g) || []).length;
   return crlf > lf ? '\r\n' : '\n';
-}
-
-function extractExports(source) {
-  const names = [];
-  source.replace(/^export\s+function\s+([A-Za-z_$][\w$]*)\s*\(/gm, (_, name) => {
-    names.push(name);
-    return _;
-  });
-  source.replace(/^export\s+const\s+([A-Za-z_$][\w$]*)\s*=/gm, (_, name) => {
-    names.push(name);
-    return _;
-  });
-  const unique = [...new Set(names)];
-  if (!unique.length) throw new Error('No named exports found in scoring.mjs');
-  return unique;
-}
-
-function stripExports(source) {
-  return source
-    .replace(/^export\s+function\s+/gm, 'function ')
-    .replace(/^export\s+const\s+/gm, 'const ')
-    .replace(/^export\s+let\s+/gm, 'let ')
-    .replace(/^export\s+var\s+/gm, 'var ')
-    .replace(/^export\s+class\s+/gm, 'class ')
-    .replace(/^export\s+default\s+/gm, '');
-}
-
-function buildBlock(source) {
-  const normalized = normalizeEol(source).trimEnd();
-  const names = extractExports(normalized);
-  const body = stripExports(normalized)
-    .split('\n')
-    .map(line => line ? `  ${line}` : '')
-    .join('\n');
-  const returned = names.map(name => `    ${name},`).join('\n');
-  return [
-    START,
-    'window.WorkerScoring = (() => {',
-    body,
-    '',
-    '  return Object.freeze({',
-    returned,
-    '  });',
-    '})();',
-    END,
-  ].join('\n');
-}
-
-function extractBlock(html) {
-  const start = html.indexOf(START);
-  const end = html.indexOf(END);
-  if (start < 0 || end < 0 || end < start) return null;
-  return html.slice(start, end + END.length);
 }
 
 function replaceOrInsertBlock(html, block) {
