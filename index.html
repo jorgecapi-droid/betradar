@@ -4099,6 +4099,42 @@ window.WorkerScoring = (() => {
     return { home: +pHome.toFixed(3), away: +(1 - pHome).toFixed(3) };
   }
 
+  // Resultado ao intervalo (1ª parte). Os golos da 1ª parte são ~45% do total
+  // (empírico, estável entre ligas), por isso escala-se cada lambda full-time por
+  // HT_GOALS_FRACTION e reconstrói-se a MESMA matriz Dixon-Coles (tau/poisson) do
+  // full-time. Devolve P(casa à frente ao intervalo), P(empate), P(fora à frente);
+  // o empate ao intervalo é naturalmente alto (poucos golos) — o modelo capta isso.
+  const HT_GOALS_FRACTION = 0.45;
+  function htResultProbs(lambdaH, lambdaA, rho = -0.12) {
+    if (!Number.isFinite(lambdaH) || !Number.isFinite(lambdaA) || lambdaH <= 0 || lambdaA <= 0) return null;
+    const lH = Math.max(0.05, Math.min(3, lambdaH * HT_GOALS_FRACTION));
+    const lA = Math.max(0.05, Math.min(3, lambdaA * HT_GOALS_FRACTION));
+    const fact = [1, 1, 2, 6, 24, 120, 720, 5040];
+    const poi = (k, lam) => Math.exp(-lam) * Math.pow(lam, k) / fact[k];
+    const tau = (i, j) => {
+      if (i === 0 && j === 0) return 1 - lH * lA * rho;
+      if (i === 0 && j === 1) return 1 + lH * rho;
+      if (i === 1 && j === 0) return 1 + lA * rho;
+      if (i === 1 && j === 1) return 1 - rho;
+      return 1;
+    };
+    const MAX = 6;
+    let total = 0, home = 0, draw = 0, away = 0;
+    for (let i = 0; i <= MAX; i++) {
+      for (let j = 0; j <= MAX; j++) {
+        const p = tau(i, j) * poi(i, lH) * poi(j, lA);
+        total += p;
+        if (i > j) home += p; else if (i === j) draw += p; else away += p;
+      }
+    }
+    if (!(total > 0)) return null;
+    return {
+      home: +(home / total).toFixed(3),
+      draw: +(draw / total).toFixed(3),
+      away: +(away / total).toFixed(3),
+    };
+  }
+
   // Médias de golos por liga a partir do formData (input do calculateDixonColes).
   // Exige >=4 equipas com sample home E away para a liga contar.
   function computeLeagueAverages(formData){
@@ -4183,6 +4219,15 @@ window.WorkerScoring = (() => {
     const home = (pick.home || '').toLowerCase();
     const away = (pick.away || '').toLowerCase();
     const bet = (pick.bet || '').toLowerCase();
+    // Resultado ao intervalo (1ª parte): mesma matriz Dixon-Coles, lambdas escalados.
+    if (bet.startsWith('intervalo:')) {
+      const ht = htResultProbs(dc.lambdaH, dc.lambdaA);
+      if (!ht) return null;
+      if (bet === 'intervalo: vitória ' + home || bet === 'intervalo: vitoria ' + home) return ht.home;
+      if (bet === 'intervalo: vitória ' + away || bet === 'intervalo: vitoria ' + away) return ht.away;
+      if (bet === 'intervalo: empate') return ht.draw;
+      return null;
+    }
     if (bet === 'vitória ' + home || bet === 'vitoria ' + home) return dc.pHome;
     if (bet === 'vitória ' + away || bet === 'vitoria ' + away) return dc.pAway;
     if (bet === 'empate') return dc.pDraw;
@@ -4517,6 +4562,7 @@ window.WorkerScoring = (() => {
   return Object.freeze({
     calculateDixonColes,
     ahCoverProbs,
+    htResultProbs,
     computeLeagueAverages,
     calcXGWorker,
     getDcProbForPick,
@@ -4529,6 +4575,7 @@ window.WorkerScoring = (() => {
     officialHistoryRejectReason,
     aggregateOdds,
     normalizeBookmakers,
+    HT_GOALS_FRACTION,
     COMBO_HISTORY_MIN_PROB,
   });
 })();
