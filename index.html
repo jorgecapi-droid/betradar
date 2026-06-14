@@ -4069,8 +4069,6 @@ window.WorkerScoring = (() => {
   // a casa dá 1.5 golos). Reconstrói a matriz Dixon-Coles a partir dos lambdas
   // (mesma tau/poisson/truncagem do calculateDixonColes) e devolve a prob de cada
   // lado cobrir a linha. Para .5, pAway = 1 - pHome por construção.
-  // NOTA v2 futura: o Handicap europeu/3-way (Handicap Result, id 9) tem o "empate
-  // handicap" como terceiro resultado e NÃO passa por aqui.
   function ahCoverProbs(lambdaH, lambdaA, homeLine, rho = -0.12) {
     if (!Number.isFinite(lambdaH) || !Number.isFinite(lambdaA) || !Number.isFinite(homeLine)) return null;
     if (Math.abs(homeLine * 2) % 2 !== 1) return null; // só meias-linhas no v1
@@ -4097,6 +4095,80 @@ window.WorkerScoring = (() => {
     if (!(total > 0)) return null;
     const pHome = home / total;
     return { home: +pHome.toFixed(3), away: +(1 - pHome).toFixed(3) };
+  }
+
+  function dcGoalLineComboProb(lambdaH, lambdaA, dcSelection, totalSelection, line, rho = -0.12) {
+    if (!Number.isFinite(lambdaH) || !Number.isFinite(lambdaA) || !Number.isFinite(line)) return null;
+    if (Math.abs(line * 2) % 2 !== 1) return null;
+    const dc = String(dcSelection || '').toUpperCase();
+    const totalSide = String(totalSelection || '').toLowerCase();
+    if (!['1X', 'X2', '12', '1/2'].includes(dc) || !['over', 'under'].includes(totalSide)) return null;
+    const lH = Math.max(0.1, Math.min(5, lambdaH));
+    const lA = Math.max(0.1, Math.min(5, lambdaA));
+    const fact = [1, 1, 2, 6, 24, 120, 720, 5040];
+    const poi = (k, lam) => Math.exp(-lam) * Math.pow(lam, k) / fact[k];
+    const tau = (i, j) => {
+      if (i === 0 && j === 0) return 1 - lH * lA * rho;
+      if (i === 0 && j === 1) return 1 + lH * rho;
+      if (i === 1 && j === 0) return 1 + lA * rho;
+      if (i === 1 && j === 1) return 1 - rho;
+      return 1;
+    };
+    const MAX = 6;
+    let total = 0, hit = 0;
+    for (let i = 0; i <= MAX; i++) {
+      for (let j = 0; j <= MAX; j++) {
+        const p = tau(i, j) * poi(i, lH) * poi(j, lA);
+        total += p;
+        const dcHit =
+          (dc === '1X' && i >= j) ||
+          (dc === 'X2' && i <= j) ||
+          ((dc === '12' || dc === '1/2') && i !== j);
+        const goals = i + j;
+        const totalHit = totalSide === 'over' ? goals > line : goals < line;
+        if (dcHit && totalHit) hit += p;
+      }
+    }
+    if (!(total > 0)) return null;
+    return +(hit / total).toFixed(3);
+  }
+
+  // Handicap europeu / 3-way (feed "Handicap Result", id 9). `homeLine` é inteiro
+  // e aplicado à equipa da casa: Home -1 / Draw -1 / Away -1 significam, respetivamente,
+  // (golosCasa - 1) >, =, < golosFora. Este mercado tem empate de handicap e por isso
+  // é shadow-only até haver calibração própria.
+  function ehResultProbs(lambdaH, lambdaA, homeLine, rho = -0.12) {
+    if (!Number.isFinite(lambdaH) || !Number.isFinite(lambdaA) || !Number.isFinite(homeLine)) return null;
+    if (!Number.isInteger(Number(homeLine)) || Number(homeLine) === 0) return null;
+    const lH = Math.max(0.1, Math.min(5, lambdaH));
+    const lA = Math.max(0.1, Math.min(5, lambdaA));
+    const fact = [1, 1, 2, 6, 24, 120, 720, 5040];
+    const poi = (k, lam) => Math.exp(-lam) * Math.pow(lam, k) / fact[k];
+    const tau = (i, j) => {
+      if (i === 0 && j === 0) return 1 - lH * lA * rho;
+      if (i === 0 && j === 1) return 1 + lH * rho;
+      if (i === 1 && j === 0) return 1 + lA * rho;
+      if (i === 1 && j === 1) return 1 - rho;
+      return 1;
+    };
+    const MAX = 6;
+    let total = 0, home = 0, draw = 0, away = 0;
+    for (let i = 0; i <= MAX; i++) {
+      for (let j = 0; j <= MAX; j++) {
+        const p = tau(i, j) * poi(i, lH) * poi(j, lA);
+        total += p;
+        const adj = i + Number(homeLine) - j;
+        if (adj > 0) home += p;
+        else if (adj < 0) away += p;
+        else draw += p;
+      }
+    }
+    if (!(total > 0)) return null;
+    return {
+      home: +(home / total).toFixed(3),
+      draw: +(draw / total).toFixed(3),
+      away: +(away / total).toFixed(3),
+    };
   }
 
   // Resultado ao intervalo (1ª parte). Os golos da 1ª parte são ~45% do total
@@ -4216,6 +4288,10 @@ window.WorkerScoring = (() => {
       const probs = ahCoverProbs(dc.lambdaH, dc.lambdaA, homeLine);
       return probs ? probs[pick.selectionKey] : null;
     }
+    if (pick?.marketKey === 'eh' && pick.line != null && ['home', 'draw', 'away'].includes(pick.selectionKey)) {
+      const probs = ehResultProbs(dc.lambdaH, dc.lambdaA, Number(pick.line));
+      return probs ? probs[pick.selectionKey] : null;
+    }
     const home = (pick.home || '').toLowerCase();
     const away = (pick.away || '').toLowerCase();
     const bet = (pick.bet || '').toLowerCase();
@@ -4238,6 +4314,14 @@ window.WorkerScoring = (() => {
     if (bet === '1x') return dc.p1X;
     if (bet === 'x2') return dc.pX2;
     if (bet === '12') return dc.p12;
+    const dcGoalLine = bet.match(/^(1x|x2|1\/2|12)\s+\+\s+(over|under)\s+([13]\.5)$/);
+    if (dcGoalLine) return dcGoalLineComboProb(
+      dc.lambdaH,
+      dc.lambdaA,
+      dcGoalLine[1] === '1/2' ? '1/2' : dcGoalLine[1].toUpperCase(),
+      dcGoalLine[2],
+      Number(dcGoalLine[3])
+    );
     if (bet === '1x + over 2.5') return dc.p1XOver;
     if (bet === 'x2 + over 2.5') return dc.pX2Over;
     if (bet === '1/2 + over 2.5' || bet === '12 + over 2.5') return dc.p12Over;
@@ -4387,6 +4471,7 @@ window.WorkerScoring = (() => {
   }
 
   const PT_BOOKMAKER_PRIORITY = ['betano'];
+  const AH_SHADOW_ABS_LINES = new Set([1.5, 2.5, 3.5]);
   function normBookmakerName(name){
     return String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'');
   }
@@ -4484,6 +4569,22 @@ window.WorkerScoring = (() => {
             collect(`ah|${isHome?'H':'A'}|${line}`,'ah',`Handicap 2-way: ${team} ${fmt}`,odd,preferredBk);
           }
         }
+        if(id===9){
+          // Handicap europeu / 3-way (Betano "Handicap", feed "Handicap Result").
+          // Linha inteira aplicada à equipa da casa e três seleções possíveis:
+          // Home L, Draw L, Away L. Shadow-only até haver amostra/calibração.
+          for(const v of vs){
+            const m=/^(Home|Draw|Away)\s+([+-]?\d+)$/.exec(String(v.value||'').trim());
+            if(!m)continue;
+            const line=parseInt(m[2],10);
+            if(!Number.isInteger(line)||line===0)continue;
+            const odd=parseFloat(v.odd)||0;
+            const sel=m[1].toLowerCase();
+            const label=sel==='home'?home:(sel==='away'?away:'Empate');
+            const fmt=line>0?`+${line}`:`${line}`;
+            collect(`eh|${sel}|${line}`,'eh_shadow',`Handicap 3-way: ${label} ${fmt}`,odd,preferredBk);
+          }
+        }
         if(id===10||id===26||/half time|first half|1st half|intervalo/i.test(bn)){
           const hO=parseFloat((vs.find(v=>v.value==='Home')||vs.find(v=>v.value===home))?.odd)||0;
           const dO=parseFloat(vs.find(v=>v.value==='Draw')?.odd)||0;
@@ -4510,6 +4611,32 @@ window.WorkerScoring = (() => {
         ahSides[side].set(lineStr,{g,agg,hasPreferred});
         continue;
       }
+      if(g.marketType==='eh_shadow'){
+        const [,selectionKey,lineStr]=key.split('|');
+        const line=parseInt(lineStr,10);
+        if(!Number.isInteger(line)||line===0)continue;
+        if(agg<1.20||agg>15.00)continue;
+        const sign=line>0?'plus':'minus';
+        picks.push({
+          marketType:'eh_shadow',
+          marketKey:'eh',
+          period:'ft',
+          selectionKey,
+          line,
+          bet:g.bet,
+          odd:agg,
+          ev:simpleEv(agg),
+          prob:Math.round(100/agg),
+          shadowOnly:true,
+          noOfficialHistory:true,
+          informativeRisk:true,
+          _shadowRule:`eh-3way-${selectionKey}-${sign}-${Math.abs(line)}`,
+          _nBookies:g.odds.length,
+          _oddsSource:hasPreferred?'betano':'aggregate',
+          _preferredBookmaker:hasPreferred?'Betano':null,
+        });
+        continue;
+      }
       // Range sanity por mercado (mantém comportamento pré-existente).
       if(g.marketType==='totals'&&(agg<1.20||agg>4.50))continue;
       if(g.marketType==='corners'&&(agg<1.50||agg>3.00))continue;
@@ -4525,6 +4652,22 @@ window.WorkerScoring = (() => {
       });
     }
 
+    const makeAhPick=(selectionKey,line,entry,extra={})=>({
+      marketType:'ah',
+      marketKey:'ah',
+      period:'ft',
+      selectionKey,
+      line,
+      bet:entry.g.bet,
+      odd:entry.agg,
+      ev:simpleEv(entry.agg),
+      prob:Math.round(100/entry.agg),
+      _nBookies:entry.g.odds.length,
+      _oddsSource:entry.hasPreferred?'betano':'aggregate',
+      _preferredBookmaker:entry.hasPreferred?'Betano':null,
+      ...extra,
+    });
+
     // Handicap 2-way: escolher a LINHA PRINCIPAL — o par (casa L, fora -L) com as
     // odds mais equilibradas entre si, dentro de uma janela perto do even money
     // (é assim que as casas definem a linha principal). Publica no máximo 2 picks
@@ -4539,29 +4682,38 @@ window.WorkerScoring = (() => {
       if(!mainAh||gap<mainAh.gap)mainAh={gap,homeLine,h,a};
     }
     if(mainAh){
-      const pushAh=(selectionKey,line,entry)=>picks.push({
-        marketType:'ah',
-        marketKey:'ah',
-        period:'ft',
-        selectionKey,
-        line,
-        bet:entry.g.bet,
-        odd:entry.agg,
-        ev:simpleEv(entry.agg),
-        prob:Math.round(100/entry.agg),
-        _nBookies:entry.g.odds.length,
-        _oddsSource:entry.hasPreferred?'betano':'aggregate',
-        _preferredBookmaker:entry.hasPreferred?'Betano':null,
-      });
+      const pushAh=(selectionKey,line,entry)=>picks.push(makeAhPick(selectionKey,line,entry));
       pushAh('home',mainAh.homeLine,mainAh.h);
       pushAh('away',-mainAh.homeLine,mainAh.a);
     }
+
+    // Shadow tracker: linhas alternativas pedidas (+/-1.5, +/-2.5 e +/-3.5), sem qualquer
+    // exposição pública. O calcTops anexa probabilidade/EV do modelo e decide quais
+    // entram em ahShadowPool para liquidação separada no histórico.
+    const pushAhShadow=(side,lineStr,entry)=>{
+      const line=parseFloat(lineStr);
+      if(!AH_SHADOW_ABS_LINES.has(Math.abs(line)))return;
+      if(entry.agg<1.20||entry.agg>8.00)return;
+      const sign=line>0?'plus':'minus';
+      const abs=String(Math.abs(line)).replace('.','_');
+      picks.push(makeAhPick(side==='H'?'home':'away',line,entry,{
+        marketType:'ah_shadow',
+        shadowOnly:true,
+        noOfficialHistory:true,
+        informativeRisk:true,
+        _shadowRule:`ah-alt-${sign}-${abs}`,
+      }));
+    };
+    for(const [lineStr,entry] of ahSides.H)pushAhShadow('H',lineStr,entry);
+    for(const [lineStr,entry] of ahSides.A)pushAhShadow('A',lineStr,entry);
     return picks;
   }
 
   return Object.freeze({
     calculateDixonColes,
     ahCoverProbs,
+    dcGoalLineComboProb,
+    ehResultProbs,
     htResultProbs,
     computeLeagueAverages,
     calcXGWorker,
